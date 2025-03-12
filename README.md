@@ -36,7 +36,7 @@ cd automate-it-to-get-it
 ### Install Dependencies
 
 ```bash
-npm ci
+npm ci && npx plawright install
 ```
 
 ### Configure Environment Variables
