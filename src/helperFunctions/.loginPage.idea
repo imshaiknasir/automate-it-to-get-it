@@ -1,0 +1,61 @@
+import { Page } from "playwright";
+import { takeScreenshotWithHighlight } from './.screenshot.idea';
+
+// function to click on login button
+export const clickOnLoginButton = async (page: Page, screenshotDir: string = 'screenshots') => {
+    // Using CSS selector instead of XPath
+    const loginButtonSelector = '#login_Layer';
+    
+    // Take screenshot before clicking (no highlight)
+    await takeScreenshotWithHighlight(page, '', 'before_click_login', screenshotDir);
+    
+    // Highlight and take screenshot
+    await takeScreenshotWithHighlight(page, loginButtonSelector, 'highlight_login_button', screenshotDir);
+    
+    // Click the login button
+    await page.locator(loginButtonSelector).click();
+    
+    // Take screenshot after clicking
+    await takeScreenshotWithHighlight(page, '', 'after_click_login', screenshotDir);
+};
+
+// function to check if drawer is open
+export const isDrawerOpen = async (page: Page, screenshotDir: string = 'screenshots') => {
+    const drawerSelector = '.drawer-wrapper';
+    
+    // Take screenshot highlighting the drawer
+    await takeScreenshotWithHighlight(page, drawerSelector, 'check_drawer', screenshotDir);
+    
+    const drawer = page.locator(drawerSelector);
+    return await drawer.isVisible();
+};
+
+// function to enter email and password
+export const enterEmailAndPassword = async (
+    page: Page, 
+    email: string, 
+    password: string, 
+    screenshotDir: string = 'screenshots'
+) => {
+    // Email field interaction
+    const emailSelector = 'input[placeholder="Enter your active Email ID / Username"]';
+    await takeScreenshotWithHighlight(page, emailSelector, 'before_email_entry', screenshotDir);
+    await page.getByRole('textbox', { name: 'Enter your active Email ID /' }).pressSequentially(email, { delay: 100 });
+    await takeScreenshotWithHighlight(page, emailSelector, 'after_email_entry', screenshotDir);
+    
+    // Password field interaction
+    const passwordSelector = 'input[placeholder="Enter your password"]';
+    await takeScreenshotWithHighlight(page, passwordSelector, 'before_password_entry', screenshotDir);
+    await page.getByRole('textbox', { name: 'Enter your password' }).pressSequentially(password, { delay: 100 });
+    await takeScreenshotWithHighlight(page, passwordSelector, 'after_password_entry', screenshotDir);
+    
+    // Show password button interaction
+    // Changed from Playwright-specific selector to standard CSS selector
+    const showPasswordSelector = 'button.showBtn';
+    await takeScreenshotWithHighlight(page, showPasswordSelector, 'before_show_password', screenshotDir);
+    await page.getByText('Show', { exact: true }).click();
+    await takeScreenshotWithHighlight(page, passwordSelector, 'after_show_password', screenshotDir);
+};
+
+
+

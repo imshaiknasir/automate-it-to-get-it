@@ -1,0 +1,76 @@
+import { Page } from "playwright";
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Helper function to create screenshot directory if it doesn't exist
+export const ensureScreenshotDir = (dirPath: string) => {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+  return dirPath;
+};
+
+// Helper function to take screenshot with optional element highlighting
+export const takeScreenshotWithHighlight = async (
+  page: Page, 
+  elementSelector: string, 
+  stepName: string,
+  screenshotDir: string = 'screenshots'
+) => {
+  // Ensure the screenshot directory exists
+  const dirPath = ensureScreenshotDir(screenshotDir);
+  
+  // Add a highlight effect to the element if provided
+  if (elementSelector) {
+    await page.evaluate((selector) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        // Save original styles
+        const originalOutline = (element as HTMLElement).style.outline;
+        const originalBoxShadow = (element as HTMLElement).style.boxShadow;
+        
+        // Apply highlight
+        (element as HTMLElement).style.outline = '3px solid red';
+        (element as HTMLElement).style.boxShadow = '0 0 10px rgba(255, 0, 0, 0.7)';
+        
+        // Return a cleanup function
+        return { originalOutline, originalBoxShadow };
+      }
+      return null;
+    }, elementSelector);
+  }
+  
+  // Take the screenshot
+  const timestamp = new Date().getTime();
+  const screenshotPath = path.join(dirPath, `${stepName}_${timestamp}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: false });
+  
+  // Remove highlight if it was added
+  if (elementSelector) {
+    const originalStyles = await page.evaluate((selector) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        return {
+          originalOutline: (element as HTMLElement).style.outline,
+          originalBoxShadow: (element as HTMLElement).style.boxShadow
+        };
+      }
+      return null;
+    }, elementSelector);
+    
+    if (originalStyles) {
+      await page.evaluate(
+        (params) => {
+          const element = document.querySelector(params.selector);
+          if (element) {
+            (element as HTMLElement).style.outline = params.styles.originalOutline;
+            (element as HTMLElement).style.boxShadow = params.styles.originalBoxShadow;
+          }
+        },
+        { selector: elementSelector, styles: originalStyles }
+      );
+    }
+  }
+  
+  return screenshotPath;
+}; 
