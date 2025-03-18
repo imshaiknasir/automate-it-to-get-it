@@ -14,3 +14,9 @@ screenshots/
 
 # dist folder
 dist/
+
+# Temporary files
+temp/
+
+# Videos
+videos/

@@ -31,7 +31,7 @@ export async function waitForHomePage(page: Page): Promise<boolean> {
     while (Date.now() - startTime < timeout) {
         const currentUrl = page.url();
         if (currentUrl.includes('mnjuser/homepage')) {
-            await page.getByRole('link', { name: 'View profile' }).waitFor({ state: 'visible' });
+            await page.locator("//div[@class='view-profile-wrapper']/a[@href='/mnjuser/profile']").waitFor({ state: 'visible' });
             return true;
         }
         await page.waitForTimeout(500); // Wait 500ms before checking again
