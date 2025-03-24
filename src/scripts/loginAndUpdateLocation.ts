@@ -1,8 +1,8 @@
 const { chromium } = require('playwright-extra')
 const stealth = require('puppeteer-extra-plugin-stealth')
 import { login, homepage } from '../helperFunctions';
-
 import { profilePage } from '../helperFunctions';
+import { startChatbotRemover } from './chatbotRemover';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -23,6 +23,10 @@ chromium.use(stealth());
     const page = await context.newPage();
 
     await page.goto(process.env.NAUKRI_URL as string, { waitUntil: 'load'});
+    
+    // Start the chatbot remover in background
+    const stopChatbotRemover = await startChatbotRemover(page);
+    
     await login.clickOnLoginButton(page);
     await login.enterEmailAndPassword(page, process.env.USER_EMAIL as string, process.env.USER_PASSWORD as string);
     await login.clickOnLoginButtonOnDrawer(page);
@@ -44,6 +48,9 @@ chromium.use(stealth());
     } else {
         console.log('Login failed');
     }
+    
+    // Stop the chatbot remover before closing the browser
+    stopChatbotRemover();
     
     await browser.close();
 
