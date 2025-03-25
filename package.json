@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "",
   "scripts": {
-    "clean": "rimraf dist && rimraf screenshots",
+    "clean": "rimraf videos",
     "start": "tsx src/listScripts.ts",
     "dev": "tsx watch src/listScripts.ts",
     "build": "npm run clean && tsc",
