@@ -1,90 +1,52 @@
-# 🤖 Automate-It-To-Get-It
+# Naukri.com Automation Script
 
-An automation toolkit for job seekers to streamline repetitive tasks on job portals such as Naukri.com.
+This is a Playwright-based automation script (NOT a test) that automates interactions with Naukri.com.
 
-![GitHub](https://img.shields.io/github/license/imshaiknasir/automate-it-to-get-it?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/imshaiknasir/automate-it-to-get-it?style=flat-square)
+## Features
 
-## 🌟 Features
+The script performs the following tasks:
 
-- **Headless Execution**: Run tests without displaying a browser window
-- **Stealth Mode**: Uses stealth plugins to avoid detection by anti-bot systems
+1. **Login**: Logs into Naukri.com with provided credentials
+2. **Update Career Preferences**: Navigates to profile and adds "Kolkata" as a preferred work location
+3. **Logout**: Logs out from the application
 
-## 🛠️ Tech Stack
+## Setup
 
-- **TypeScript**: For type-safe code
-- **Playwright**: Browser automation framework
-- **Playwright-Extra**: Extended capabilities for Playwright
-- **Stealth Plugin**: To bypass anti-bot detection
-- **dotenv**: For environment variable management
-
-## 📋 Prerequisites
-
-- Node.js (v18 or higher)
-- npm or yarn
-- Git
-
-## 🚀 Getting Started
-
-### Clone the Repository
-
+1. Install dependencies:
 ```bash
-git clone git@github.com:imshaiknasir/automate-it-to-get-it.git
-cd automate-it-to-get-it
+npm install
 ```
 
-### Install Dependencies
-
-```bash
-npm ci && npx plawright install
-```
-
-### Configure Environment Variables
-
-1. Copy the example environment file:
-```bash
-cp example.env .env
-```
-
-2. Edit the `.env` file with your credentials:
+2. Configure your credentials in `.env` file:
 ```
 USER_EMAIL=your_email@example.com
 USER_PASSWORD=your_password
-NAUKRI_URL=https://www.example.com/
+NAUKRI_URL=https://www.naukri.com/nlogin/login
 ```
 
-### 💻 Development Mode
+## Usage
 
-For development with automatic rebuilding:
-
+Run the automation script:
 ```bash
-npm run dev
+npm run automate
 ```
 
-## 📂 Project Structure
+The script will:
+- Open a browser window (headed mode)
+- Execute all three tasks sequentially
+- Provide console output for each step
+- Close the browser automatically when done
 
-```
-├── src/
-│   ├── helperFunctions/      # Reusable automation functions
-│   │   └── loginFunctions.ts # Login-specific helper functions
-│   └── scripts/              # Main automation scripts
-│       └── checkLoginFlow.ts # Login flow verification script
-├── dist/                     # Compiled JavaScript output
-├── .env                      # Environment variables (private)
-├── example.env               # Example environment variables
-└── package.json              # Project dependencies and scripts
-```
+## Configuration
 
-## 📜 License
+Edit `playwright.config.js` to customize:
+- `headless`: Set to `true` for headless execution
+- `slowMo`: Adjust delay between actions (in milliseconds)
+- `timeout`: Adjust default timeout for actions
 
-This project is licensed under the ISC License - see the LICENSE file for details.
+## Notes
 
-## 🙏 Acknowledgements
-
-- [Playwright](https://playwright.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
-- [Naukri.com](https://www.naukri.com/)
-
----
-
-Made with ❤️ by [Shaik Nasir](https://github.com/imshaiknasir) 
+- The script uses Playwright's browser automation (not @playwright/test)
+- All actions include appropriate waits and error handling
+- The script runs in headed mode by default to visualize the automation
+- Human-like typing delays are implemented for the location input field
