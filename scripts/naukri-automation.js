@@ -31,9 +31,15 @@ async function sendLogsToTelegram(logs) {
     return;
   }
 
+  // Escape special characters for Telegram MarkdownV2
+  function escapeMarkdown(text) {
+    return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+  }
+
   // Format logs with timestamp
   const timestamp = new Date().toLocaleString();
-  const formattedLogs = `🤖 *Naukri Automation Report*\n📅 ${timestamp}\n\n${logs.join('\n')}`;
+  const escapedLogs = logs.map(log => escapeMarkdown(log)).join('\n');
+  const formattedLogs = `🤖 *Naukri Automation Report*\n📅 ${escapeMarkdown(timestamp)}\n\n${escapedLogs}`;
 
   // Split message if it's too long (Telegram has 4096 character limit)
   const maxLength = 4000;
@@ -42,16 +48,17 @@ async function sendLogsToTelegram(logs) {
   if (formattedLogs.length <= maxLength) {
     messages.push(formattedLogs);
   } else {
-    let currentMessage = `🤖 *Naukri Automation Report (Part 1)*\n📅 ${timestamp}\n\n`;
+    let currentMessage = `🤖 *Naukri Automation Report \\(Part 1\\)*\n📅 ${escapeMarkdown(timestamp)}\n\n`;
     let partNumber = 1;
     
     for (const log of logs) {
-      if ((currentMessage + log + '\n').length > maxLength) {
+      const escapedLog = escapeMarkdown(log);
+      if ((currentMessage + escapedLog + '\n').length > maxLength) {
         messages.push(currentMessage);
         partNumber++;
-        currentMessage = `🤖 *Naukri Automation Report (Part ${partNumber})*\n\n`;
+        currentMessage = `🤖 *Naukri Automation Report \\(Part ${partNumber}\\)*\n\n`;
       }
-      currentMessage += log + '\n';
+      currentMessage += escapedLog + '\n';
     }
     
     if (currentMessage.length > 0) {
@@ -64,7 +71,7 @@ async function sendLogsToTelegram(logs) {
     const data = JSON.stringify({
       chat_id: chatId,
       text: message,
-      parse_mode: 'Markdown'
+      parse_mode: 'MarkdownV2'
     });
 
     const options = {
@@ -87,6 +94,7 @@ async function sendLogsToTelegram(logs) {
             resolve();
           } else {
             originalError(`Failed to send logs to Telegram. Status: ${res.statusCode}`);
+            originalError(`Response: ${responseData}`);
             resolve(); // Don't reject to avoid breaking the script
           }
         });

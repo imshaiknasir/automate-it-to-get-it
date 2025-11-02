@@ -1,0 +1,58 @@
+name: Naukri Automation
+
+on:
+  # Manual trigger - run on demand from GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for running'
+        required: false
+        default: 'Manual trigger'
+  
+  # Scheduled run - runs daily at 9 AM IST (3:30 AM UTC)
+  schedule:
+    - cron: '30 3 * * *'  # Adjust time as needed
+
+jobs:
+  automate:
+    runs-on: ubuntu-slim
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+      
+      - name: Create .env file
+        run: |
+          echo "USER_EMAIL=${{ secrets.USER_EMAIL }}" >> .env
+          echo "USER_PASSWORD=${{ secrets.USER_PASSWORD }}" >> .env
+          echo "NAUKRI_URL=${{ secrets.NAUKRI_URL }}" >> .env
+          echo "PROXY_USERNAME=${{ secrets.PROXY_USERNAME }}" >> .env
+          echo "PROXY_PASSWORD=${{ secrets.PROXY_PASSWORD }}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+      
+      - name: Run Naukri automation
+        run: npm run automate
+        continue-on-error: true
+      
+      - name: Upload logs (if available)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: automation-logs
+          path: |
+            *.log
+            screenshots/
+          if-no-files-found: ignore
