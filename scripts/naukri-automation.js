@@ -109,10 +109,15 @@ async function sendLogsToTelegram(logs) {
 }
 
 (async () => {
-  // Launch browser
+  // Launch browser with proxy configuration
   const browser = await chromium.launch({ 
     headless: false,
-    slowMo: 500 // Slow down actions for better visibility
+    slowMo: 500, // Slow down actions for better visibility
+    proxy: {
+      server: 'http://p.webshare.io:80',
+      username: process.env.PROXY_USERNAME || 'nfcrqioq-rotate',
+      password: process.env.PROXY_PASSWORD || 'ifs2qe30hpiv'
+    }
   });
   
   const context = await browser.newContext();
