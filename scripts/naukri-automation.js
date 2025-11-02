@@ -117,10 +117,13 @@ async function sendLogsToTelegram(logs) {
 }
 
 (async () => {
+  // Detect if running in CI environment
+  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+  
   // Launch browser with proxy configuration
   const browser = await chromium.launch({ 
-    headless: false,
-    slowMo: 500, // Slow down actions for better visibility
+    headless: isCI, // Use headless mode in CI, headed mode locally
+    slowMo: isCI ? 0 : 500, // No slowMo in CI for faster execution
     proxy: {
       server: 'http://p.webshare.io:80',
       username: process.env.PROXY_USERNAME || 'nfcrqioq-rotate',
