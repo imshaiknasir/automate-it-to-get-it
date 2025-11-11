@@ -45,7 +45,30 @@ jobs:
       
       - name: Verify secrets
         run: |
-          node -e "const required=['USER_EMAIL','USER_PASSWORD','PROXY_USERNAME','PROXY_PASSWORD'];let missing=false;required.forEach(key=>{const value=process.env[key];if(!value){console.error(`[Secrets] Missing ${key}; failing fast.`);missing=true;}else{console.log(`[Secrets] ${key} loaded (length ${value.length}).`);}});if(missing){process.exit(1);}['NAUKRI_URL','TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID'].forEach(key=>{const value=process.env[key];if(value){console.log(`[Secrets] ${key} loaded (length ${value.length}).`);}else{console.log(`[Secrets] ${key} not provided (optional).`);}});"
+          node <<'NODE'
+          const required = ['USER_EMAIL', 'USER_PASSWORD', 'PROXY_USERNAME', 'PROXY_PASSWORD'];
+          let missing = false;
+          required.forEach(key => {
+            const value = process.env[key];
+            if (!value) {
+              console.error(`[Secrets] Missing ${key}; failing fast.`);
+              missing = true;
+            } else {
+              console.log(`[Secrets] ${key} loaded (length ${value.length}).`);
+            }
+          });
+          if (missing) {
+            process.exit(1);
+          }
+          ['NAUKRI_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].forEach(key => {
+            const value = process.env[key];
+            if (value) {
+              console.log(`[Secrets] ${key} loaded (length ${value.length}).`);
+            } else {
+              console.log(`[Secrets] ${key} not provided (optional).`);
+            }
+          });
+          NODE
         env:
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
