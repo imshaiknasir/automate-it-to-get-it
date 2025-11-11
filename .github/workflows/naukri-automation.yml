@@ -15,7 +15,7 @@ on:
 
 jobs:
   automate:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
@@ -51,8 +51,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: automation-logs
+          name: automation-logs-${{ github.run_number }}
           path: |
             *.log
             screenshots/
           if-no-files-found: ignore
+          retention-days: 7
