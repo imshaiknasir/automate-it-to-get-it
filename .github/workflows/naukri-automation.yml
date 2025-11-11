@@ -43,6 +43,18 @@ jobs:
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
       
+      - name: Verify secrets
+        run: |
+          node -e "const required=['USER_EMAIL','USER_PASSWORD','PROXY_USERNAME','PROXY_PASSWORD'];let missing=false;required.forEach(key=>{const value=process.env[key];if(!value){console.error(`[Secrets] Missing ${key}; failing fast.`);missing=true;}else{console.log(`[Secrets] ${key} loaded (length ${value.length}).`);}});if(missing){process.exit(1);}['NAUKRI_URL','TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID'].forEach(key=>{const value=process.env[key];if(value){console.log(`[Secrets] ${key} loaded (length ${value.length}).`);}else{console.log(`[Secrets] ${key} not provided (optional).`);}});"
+        env:
+          USER_EMAIL: ${{ secrets.USER_EMAIL }}
+          USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
+          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+          NAUKRI_URL: ${{ secrets.NAUKRI_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      
       - name: Run Naukri automation
         run: npm run automate
         continue-on-error: true
