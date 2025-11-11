@@ -162,6 +162,21 @@ async function sendLogsToTelegram(logs) {
   });
   
   const page = await context.newPage();
+
+  // Reduce automation signals via CDP overrides
+  const client = await context.newCDPSession(page);
+  await client.send('Network.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    platform: 'Win32'
+  });
+  await client.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-IN', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      window.chrome = { runtime: {} };
+    `
+  });
   
   // Create screenshots directory if it doesn't exist
   const screenshotsDir = path.join(__dirname, '..', 'screenshots');
@@ -190,21 +205,45 @@ async function sendLogsToTelegram(logs) {
     // Navigate to login page
     console.log('Navigating to login page...');
     await page.goto(process.env.NAUKRI_URL || 'https://www.naukri.com/nlogin/login', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'networkidle',
       timeout: 60000
     });
-    
-    // Wait a bit for any dynamic content
-    await page.waitForTimeout(3000);
-    
+
+    // Wait for React app to render content inside #root
+    console.log('Waiting for page content to load...');
+    await page.waitForFunction(
+      () => {
+        const root = document.querySelector('#root');
+        return root && root.innerHTML.trim().length > 0;
+      },
+      { timeout: 30000 }
+    );
+
+    // Allow additional time for widgets or analytics to finish rendering
+    await page.waitForTimeout(5000);
+
+    // Log page title and URL for debugging
+    console.log('Current URL:', page.url());
+    console.log('Page title:', await page.title());
+
     // Take screenshot for debugging
     const loginScreenshot = path.join(screenshotsDir, `login-page-${Date.now()}.png`);
     await page.screenshot({ path: loginScreenshot, fullPage: true });
     console.log(`✓ Screenshot saved: ${loginScreenshot}`);
-    
-    // Log page title and URL for debugging
-    console.log('Current URL:', page.url());
-    console.log('Page title:', await page.title());
+
+    // Remove overlays that block interaction when bot detection triggers
+    console.log('Removing bot detection overlays...');
+    await page.evaluate(() => {
+      const overlays = document.querySelectorAll('img[style*="pointer-events:none"], img[style*="z-index:1000"]');
+      overlays.forEach(node => node.parentNode && node.parentNode.removeChild(node));
+      const blocker = document.querySelector('#ni-gnb-header-section');
+      if (blocker) {
+        blocker.style.display = 'none';
+      }
+    });
+    console.log('✓ Overlays removed');
+
+    await page.waitForTimeout(1000);
 
     // Try multiple selectors for email field
     console.log('Entering email...');
