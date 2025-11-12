@@ -9,6 +9,9 @@ node_modules/
 # Environment variables
 .env
 
+# Proxy cache
+.proxy-cache.json
+
 # Screenshots
 screenshots/
 

@@ -7,11 +7,177 @@ require('dotenv').config();
 // Enable stealth plugin to reduce automation fingerprints
 chromium.use(stealth);
 
+/**
+ * Fetches proxy list from WebShare.io API
+ * @returns {Promise<Array<string>>} Array of proxy URLs
+ */
+async function fetchProxyList() {
+  const proxyListUrl = process.env.PROXY_LIST_URL;
+  
+  if (!proxyListUrl) {
+    console.log('No PROXY_LIST_URL configured.');
+    return [];
+  }
+
+  try {
+    console.log('Fetching proxy list from WebShare.io...');
+    const response = await fetch(proxyListUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch proxy list: ${response.status} ${response.statusText}`);
+    }
+    
+    const text = await response.text();
+    
+    // Parse proxy list
+    // Format can be either:
+    // - IP:PORT (direct mode)
+    // - IP:PORT:username:password (username mode)
+    const proxies = text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'))
+      .map(proxy => {
+        // If proxy already has protocol, return as-is
+        if (proxy.startsWith('http://') || proxy.startsWith('https://')) {
+          return proxy;
+        }
+        
+        // Parse the format: IP:PORT or IP:PORT:username:password
+        const parts = proxy.split(':');
+        
+        if (parts.length >= 4) {
+          // Format: IP:PORT:username:password
+          const [ip, port, username, password] = parts;
+          return `http://${username}:${password}@${ip}:${port}`;
+        } else if (parts.length === 2) {
+          // Format: IP:PORT (direct)
+          return `http://${proxy}`;
+        } else {
+          console.warn(`Skipping invalid proxy format: ${proxy}`);
+          return null;
+        }
+      })
+      .filter(proxy => proxy !== null);
+    
+    console.log(`✅ Loaded ${proxies.length} proxies from WebShare.io`);
+    return proxies;
+  } catch (error) {
+    console.error('❌ Failed to fetch proxy list:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Gets a cached proxy list or fetches new one
+ * Cache expires after 24 hours
+ * @returns {Promise<Array<string>>} Array of proxy URLs
+ */
+async function getProxyList() {
+  const cacheFile = path.join(__dirname, '..', '.proxy-cache.json');
+  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+  try {
+    // Check if cache exists and is valid
+    if (fs.existsSync(cacheFile)) {
+      const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+      const age = Date.now() - cache.timestamp;
+      
+      if (age < CACHE_DURATION && cache.proxies && cache.proxies.length > 0) {
+        console.log(`📦 Using cached proxy list (${cache.proxies.length} proxies, age: ${Math.round(age / 1000 / 60)}m)`);
+        return cache.proxies;
+      }
+    }
+  } catch (error) {
+    console.warn('Cache read failed, fetching fresh proxy list...');
+  }
+
+  // Fetch fresh proxy list
+  const proxies = await fetchProxyList();
+  
+  if (proxies.length > 0) {
+    // Save to cache
+    try {
+      fs.writeFileSync(cacheFile, JSON.stringify({
+        timestamp: Date.now(),
+        proxies: proxies
+      }));
+      console.log('💾 Proxy list cached for 24 hours');
+    } catch (error) {
+      console.warn('Failed to cache proxy list:', error.message);
+    }
+  }
+  
+  return proxies;
+}
+
+/**
+ * Selects a random proxy from the list
+ * @param {Array<string>} proxies Array of proxy URLs
+ * @returns {string|null} Random proxy URL or null
+ */
+function selectRandomProxy(proxies) {
+  if (!proxies || proxies.length === 0) return null;
+  const randomIndex = Math.floor(Math.random() * proxies.length);
+  return proxies[randomIndex];
+}
+
 (async () => {
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
-  const proxyServer = process.env.PROXY_SERVER
-    || (process.env.PROXY_USERNAME && process.env.PROXY_PASSWORD ? 'http://p.webshare.io:80' : null);
+  // Determine proxy configuration
+  let proxyConfig = null;
+  
+  if (process.env.PROXY_LIST_URL) {
+    // New method: Download proxy list and select random one
+    const proxies = await getProxyList();
+    const proxyUrl = selectRandomProxy(proxies);
+    
+    if (proxyUrl) {
+      console.log(`🎲 Selected random proxy: ${proxyUrl}`);
+      
+      // Parse proxy URL to extract credentials if present
+      // Format: http://username:password@IP:PORT or http://IP:PORT
+      try {
+        const url = new URL(proxyUrl);
+        const server = `${url.protocol}//${url.hostname}:${url.port}`;
+        
+        proxyConfig = { server };
+        
+        // Add credentials if present
+        if (url.username && url.password) {
+          proxyConfig.username = url.username;
+          proxyConfig.password = url.password;
+          console.log(`🔐 Using authenticated proxy: ${server} (user: ${url.username})`);
+        } else {
+          console.log(`🌐 Using direct proxy: ${server}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to parse proxy URL: ${error.message}`);
+        proxyConfig = null;
+      }
+    } else {
+      console.log('⚠️  No proxies available, using direct connection.');
+    }
+  } else if (process.env.PROXY_SERVER) {
+    // Fallback: Use static proxy server
+    const proxyUrl = process.env.PROXY_SERVER;
+    console.log(`🔧 Using static proxy: ${proxyUrl}`);
+    
+    try {
+      const url = new URL(proxyUrl);
+      const server = `${url.protocol}//${url.hostname}:${url.port}`;
+      
+      proxyConfig = { server };
+      
+      if (url.username && url.password) {
+        proxyConfig.username = url.username;
+        proxyConfig.password = url.password;
+      }
+    } catch (error) {
+      proxyConfig = { server: proxyUrl };
+    }
+  }
 
   const launchOptions = {
     headless: isCI,
@@ -23,15 +189,11 @@ chromium.use(stealth);
     ]
   };
 
-  if (proxyServer) {
-    console.log(`Routing traffic through proxy: ${proxyServer}`);
-    launchOptions.proxy = {
-      server: proxyServer,
-      username: process.env.PROXY_USERNAME || undefined,
-      password: process.env.PROXY_PASSWORD || undefined
-    };
+  if (proxyConfig) {
+    launchOptions.proxy = proxyConfig;
+    console.log(`✅ Proxy configured successfully`);
   } else {
-    console.log('No proxy configured; using direct connection.');
+    console.log('🌐 No proxy configured; using direct connection.');
   }
 
   const browser = await chromium.launch(launchOptions);
@@ -48,7 +210,7 @@ chromium.use(stealth);
 
   try {
     console.log('Navigating to Naukri.com...');
-    await page.goto('https://www.naukri.com/', { waitUntil: 'load', timeout: 60000 });
+    await page.goto('https://www.naukri.com/', { waitUntil: 'domcontentloaded', timeout: isCI ? 90000 : 60000 });
     console.log('Page loaded.');
 
     console.log('Waiting for Jobseeker Login button...');

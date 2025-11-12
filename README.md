@@ -18,11 +18,37 @@ npm install
 ```
 
 2. Configure your credentials in `.env` file:
-```
+```env
 USER_EMAIL=your_email@example.com
 USER_PASSWORD=your_password
 NAUKRI_URL=https://www.naukri.com/nlogin/login
+
+# Proxy Configuration (Optional)
+PROXY_LIST_URL=https://proxy.webshare.io/api/v2/proxy/list/download/YOUR_TOKEN/-/any/username/direct/-/?plan_id=YOUR_PLAN_ID
 ```
+
+### Proxy Configuration
+
+The script supports two proxy methods:
+
+**Method 1: Dynamic Proxy List (Recommended)**
+- Set `PROXY_LIST_URL` with your WebShare.io download link
+- The script will:
+  - Download the full proxy list on first run
+  - Cache it locally for 24 hours (`.proxy-cache.json`)
+  - Randomly select one proxy per session for consistency
+  - Refresh cache after 24 hours
+
+**Method 2: Static Proxy (Fallback)**
+- Set `PROXY_SERVER=http://IP:PORT` for a single proxy
+- Used only if `PROXY_LIST_URL` is not configured
+
+**Benefits of Method 1:**
+- ✅ No authentication overhead (direct connection)
+- ✅ Random proxy selection per run
+- ✅ Session consistency (same IP throughout one run)
+- ✅ Automatic cache management
+- ✅ Better reliability with multiple proxies
 
 ## Usage
 
