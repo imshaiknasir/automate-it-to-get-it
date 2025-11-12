@@ -9,9 +9,10 @@ on:
         required: false
         default: 'Manual trigger'
   
-  # Scheduled run - runs daily at 9 AM IST (3:30 AM UTC)
+  # Scheduled runs - daily at 8:30 AM IST (03:00 UTC) and 11:30 AM IST (06:00 UTC)
   schedule:
-    - cron: '30 3 * * *'  # Adjust time as needed
+    - cron: '0 3 * * *'
+    - cron: '0 6 * * *'
 
 jobs:
   automate:
