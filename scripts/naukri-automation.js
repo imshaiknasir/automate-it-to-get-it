@@ -48,6 +48,78 @@ async function clickWithFallback(page, selectors, description) {
   throw new Error(`Could not click ${description}; no selectors matched.`);
 }
 
+/**
+ * Decodes base64-encoded CV files from environment variables and saves them temporarily
+ * @returns {Array<{path: string, ext: string}>} Array of decoded CV file paths
+ */
+function decodeAndSaveCVs() {
+  const cvFiles = [];
+  const tempDir = path.join(__dirname, '..', 'temp-cvs');
+  
+  // Create temp directory if it doesn't exist
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  
+  // Check for CV files in environment (CV_FILE_1_BASE64, CV_FILE_2_BASE64, etc.)
+  for (let i = 1; i <= 10; i++) {
+    const base64Key = `CV_FILE_${i}_BASE64`;
+    const extKey = `CV_FILE_${i}_EXT`;
+    
+    const base64Content = process.env[base64Key];
+    const fileExt = process.env[extKey] || 'pdf';
+    
+    if (base64Content) {
+      try {
+        const buffer = Buffer.from(base64Content, 'base64');
+        const filePath = path.join(tempDir, `resume-${i}.${fileExt}`);
+        fs.writeFileSync(filePath, buffer);
+        cvFiles.push({ path: filePath, ext: fileExt });
+        console.log(`Decoded CV ${i}: ${filePath} (${(buffer.length / 1024).toFixed(2)} KB)`);
+      } catch (error) {
+        console.warn(`Failed to decode ${base64Key}: ${error.message}`);
+      }
+    }
+  }
+  
+  return cvFiles;
+}
+
+/**
+ * Selects a random CV from the available decoded CVs
+ * @param {Array<{path: string, ext: string}>} cvFiles Array of CV file objects
+ * @returns {{path: string, ext: string}|null} Randomly selected CV or null if none available
+ */
+function selectRandomCV(cvFiles) {
+  if (cvFiles.length === 0) {
+    return null;
+  }
+  
+  const randomIndex = Math.floor(Math.random() * cvFiles.length);
+  const selected = cvFiles[randomIndex];
+  console.log(`Selected CV ${randomIndex + 1} of ${cvFiles.length}: ${path.basename(selected.path)}`);
+  return selected;
+}
+
+/**
+ * Cleans up temporary CV files after upload
+ * @param {string} tempDir Directory containing temporary CV files
+ */
+function cleanupTempFiles(tempDir) {
+  try {
+    if (fs.existsSync(tempDir)) {
+      const files = fs.readdirSync(tempDir);
+      for (const file of files) {
+        fs.unlinkSync(path.join(tempDir, file));
+      }
+      fs.rmdirSync(tempDir);
+      console.log('Temporary CV files cleaned up.');
+    }
+  } catch (error) {
+    console.warn(`Failed to cleanup temp files: ${error.message}`);
+  }
+}
+
 (async () => {
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
@@ -179,6 +251,77 @@ async function clickWithFallback(page, selectors, description) {
     await preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")').click();
     await preferencesModal.waitFor({ state: 'hidden', timeout: 20000 });
     console.log('Career preferences saved.');
+
+    // === CV Upload Flow ===
+    let uploadedCV = false;
+    const tempDir = path.join(__dirname, '..', 'temp-cvs');
+    
+    try {
+      console.log('\n--- Starting CV Upload Process ---');
+      
+      // Decode all available CVs from environment variables
+      const cvFiles = decodeAndSaveCVs();
+      
+      if (cvFiles.length === 0) {
+        console.log('No CV files found in environment variables. Skipping CV upload.');
+        console.log('To enable CV uploads, add CV_FILE_1_BASE64 (and optionally CV_FILE_1_EXT) to your secrets.');
+      } else {
+        // Select a random CV
+        const selectedCV = selectRandomCV(cvFiles);
+        
+        if (selectedCV) {
+          console.log(`\nUploading resume: ${path.basename(selectedCV.path)}`);
+          
+          // Scroll to resume section
+          const resumeContainer = page.locator('.resume-upload-container').first();
+          await resumeContainer.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          
+          // Click the "Update resume" button
+          const updateResumeButton = resumeContainer.locator('button.upload-button:has-text("Update resume")');
+          await updateResumeButton.waitFor({ state: 'visible', timeout: 15000 });
+          console.log('Update resume button found.');
+          
+          // Get the file input and upload the CV
+          const fileInput = resumeContainer.locator('input[type="file"].upload-input');
+          await fileInput.setInputFiles(selectedCV.path);
+          console.log('CV file uploaded to input.');
+          
+          // Wait for progress bar to appear
+          console.log('Waiting for upload progress...');
+          const progressBar = page.locator('.resume-upload-container .progressbar');
+          await progressBar.waitFor({ state: 'visible', timeout: 10000 });
+          console.log('Upload started - progress bar visible.');
+          
+          // Wait for progress bar to reach 100% and disappear
+          await progressBar.waitFor({ state: 'hidden', timeout: 30000 });
+          console.log('Upload complete - progress bar hidden.');
+          
+          // Additional verification: wait a bit for any post-upload processing
+          await page.waitForTimeout(2000);
+          
+          uploadedCV = true;
+          console.log('✅ CV uploaded successfully!');
+        }
+      }
+    } catch (error) {
+      console.error('CV upload failed:', error.message);
+      console.error('This is non-critical; continuing with logout.');
+      
+      // Capture screenshot of CV upload failure
+      try {
+        const timestamp = Date.now();
+        const screenshotPath = path.join(screenshotsDir, `cv-upload-error-${timestamp}.png`);
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        console.error(`CV upload error screenshot saved: ${screenshotPath}`);
+      } catch (screenshotError) {
+        console.error('Unable to capture CV upload error screenshot.');
+      }
+    } finally {
+      // Always cleanup temporary CV files
+      cleanupTempFiles(tempDir);
+      console.log('--- CV Upload Process Completed ---\n');
+    }
 
     console.log('Opening user menu for logout...');
     const menuIcon = page.locator('.nI-gNb-drawer__icon');

@@ -40,6 +40,17 @@ jobs:
           echo "USER_PASSWORD=${{ secrets.USER_PASSWORD }}" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+          # Add CV secrets if they exist (up to 5 CVs)
+          [ -n "${{ secrets.CV_FILE_1_BASE64 }}" ] && echo "CV_FILE_1_BASE64=${{ secrets.CV_FILE_1_BASE64 }}" >> .env
+          [ -n "${{ secrets.CV_FILE_1_EXT }}" ] && echo "CV_FILE_1_EXT=${{ secrets.CV_FILE_1_EXT }}" >> .env
+          [ -n "${{ secrets.CV_FILE_2_BASE64 }}" ] && echo "CV_FILE_2_BASE64=${{ secrets.CV_FILE_2_BASE64 }}" >> .env
+          [ -n "${{ secrets.CV_FILE_2_EXT }}" ] && echo "CV_FILE_2_EXT=${{ secrets.CV_FILE_2_EXT }}" >> .env
+          [ -n "${{ secrets.CV_FILE_3_BASE64 }}" ] && echo "CV_FILE_3_BASE64=${{ secrets.CV_FILE_3_BASE64 }}" >> .env
+          [ -n "${{ secrets.CV_FILE_3_EXT }}" ] && echo "CV_FILE_3_EXT=${{ secrets.CV_FILE_3_EXT }}" >> .env
+          [ -n "${{ secrets.CV_FILE_4_BASE64 }}" ] && echo "CV_FILE_4_BASE64=${{ secrets.CV_FILE_4_BASE64 }}" >> .env
+          [ -n "${{ secrets.CV_FILE_4_EXT }}" ] && echo "CV_FILE_4_EXT=${{ secrets.CV_FILE_4_EXT }}" >> .env
+          [ -n "${{ secrets.CV_FILE_5_BASE64 }}" ] && echo "CV_FILE_5_BASE64=${{ secrets.CV_FILE_5_BASE64 }}" >> .env
+          [ -n "${{ secrets.CV_FILE_5_EXT }}" ] && echo "CV_FILE_5_EXT=${{ secrets.CV_FILE_5_EXT }}" >> .env
       
       - name: Verify secrets
         run: |
@@ -66,12 +77,36 @@ jobs:
               console.log(`[Secrets] ${key} not provided (optional).`);
             }
           });
+          // Check for CV secrets
+          let cvCount = 0;
+          for (let i = 1; i <= 10; i++) {
+            const cvKey = `CV_FILE_${i}_BASE64`;
+            if (process.env[cvKey]) {
+              cvCount++;
+              console.log(`[Secrets] ${cvKey} loaded (${(process.env[cvKey].length / 1024).toFixed(2)} KB base64).`);
+            }
+          }
+          if (cvCount === 0) {
+            console.log('[Secrets] No CV files found (optional). CV upload will be skipped.');
+          } else {
+            console.log(`[Secrets] Found ${cvCount} CV file(s) for random selection.`);
+          }
           NODE
         env:
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CV_FILE_1_BASE64: ${{ secrets.CV_FILE_1_BASE64 }}
+          CV_FILE_1_EXT: ${{ secrets.CV_FILE_1_EXT }}
+          CV_FILE_2_BASE64: ${{ secrets.CV_FILE_2_BASE64 }}
+          CV_FILE_2_EXT: ${{ secrets.CV_FILE_2_EXT }}
+          CV_FILE_3_BASE64: ${{ secrets.CV_FILE_3_BASE64 }}
+          CV_FILE_3_EXT: ${{ secrets.CV_FILE_3_EXT }}
+          CV_FILE_4_BASE64: ${{ secrets.CV_FILE_4_BASE64 }}
+          CV_FILE_4_EXT: ${{ secrets.CV_FILE_4_EXT }}
+          CV_FILE_5_BASE64: ${{ secrets.CV_FILE_5_BASE64 }}
+          CV_FILE_5_EXT: ${{ secrets.CV_FILE_5_EXT }}
       
       - name: Run Naukri automation
         run: npm run automate

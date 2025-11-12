@@ -24,6 +24,9 @@ temp/
 # Videos
 videos/
 
+# Temporary CV files
+temp-cvs/
+
 #planing files Roo-code
 plan.md
 .DS_Store
