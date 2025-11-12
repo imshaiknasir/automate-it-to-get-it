@@ -1,11 +1,11 @@
 const { chromium } = require('playwright-extra');
-const stealth = require('playwright-extra-plugin-stealth');
+const stealth = require('puppeteer-extra-plugin-stealth')();
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
 // Enable stealth plugin to reduce automation fingerprints
-chromium.use(stealth());
+chromium.use(stealth);
 
 async function ensureDir(dirPath) {
   await fs.promises.mkdir(dirPath, { recursive: true });
