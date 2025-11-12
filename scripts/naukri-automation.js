@@ -7,177 +7,49 @@ require('dotenv').config();
 // Enable stealth plugin to reduce automation fingerprints
 chromium.use(stealth);
 
-/**
- * Fetches proxy list from WebShare.io API
- * @returns {Promise<Array<string>>} Array of proxy URLs
- */
-async function fetchProxyList() {
-  const proxyListUrl = process.env.PROXY_LIST_URL;
-  
-  if (!proxyListUrl) {
-    console.log('No PROXY_LIST_URL configured.');
-    return [];
-  }
-
-  try {
-    console.log('Fetching proxy list from WebShare.io...');
-    const response = await fetch(proxyListUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch proxy list: ${response.status} ${response.statusText}`);
-    }
-    
-    const text = await response.text();
-    
-    // Parse proxy list
-    // Format can be either:
-    // - IP:PORT (direct mode)
-    // - IP:PORT:username:password (username mode)
-    const proxies = text
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith('#'))
-      .map(proxy => {
-        // If proxy already has protocol, return as-is
-        if (proxy.startsWith('http://') || proxy.startsWith('https://')) {
-          return proxy;
-        }
-        
-        // Parse the format: IP:PORT or IP:PORT:username:password
-        const parts = proxy.split(':');
-        
-        if (parts.length >= 4) {
-          // Format: IP:PORT:username:password
-          const [ip, port, username, password] = parts;
-          return `http://${username}:${password}@${ip}:${port}`;
-        } else if (parts.length === 2) {
-          // Format: IP:PORT (direct)
-          return `http://${proxy}`;
-        } else {
-          console.warn(`Skipping invalid proxy format: ${proxy}`);
-          return null;
-        }
-      })
-      .filter(proxy => proxy !== null);
-    
-    console.log(`✅ Loaded ${proxies.length} proxies from WebShare.io`);
-    return proxies;
-  } catch (error) {
-    console.error('❌ Failed to fetch proxy list:', error.message);
-    return [];
-  }
+async function ensureDir(dirPath) {
+  await fs.promises.mkdir(dirPath, { recursive: true });
 }
 
-/**
- * Gets a cached proxy list or fetches new one
- * Cache expires after 24 hours
- * @returns {Promise<Array<string>>} Array of proxy URLs
- */
-async function getProxyList() {
-  const cacheFile = path.join(__dirname, '..', '.proxy-cache.json');
-  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-  try {
-    // Check if cache exists and is valid
-    if (fs.existsSync(cacheFile)) {
-      const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
-      const age = Date.now() - cache.timestamp;
-      
-      if (age < CACHE_DURATION && cache.proxies && cache.proxies.length > 0) {
-        console.log(`📦 Using cached proxy list (${cache.proxies.length} proxies, age: ${Math.round(age / 1000 / 60)}m)`);
-        return cache.proxies;
-      }
-    }
-  } catch (error) {
-    console.warn('Cache read failed, fetching fresh proxy list...');
+async function fillWithFallback(page, selectors, value, fieldLabel) {
+  if (!value) {
+    throw new Error(`Missing value for ${fieldLabel}. Check environment configuration.`);
   }
 
-  // Fetch fresh proxy list
-  const proxies = await fetchProxyList();
-  
-  if (proxies.length > 0) {
-    // Save to cache
+  for (const selector of selectors) {
     try {
-      fs.writeFileSync(cacheFile, JSON.stringify({
-        timestamp: Date.now(),
-        proxies: proxies
-      }));
-      console.log('💾 Proxy list cached for 24 hours');
+      const locator = page.locator(selector);
+      await locator.waitFor({ state: 'visible', timeout: 10000 });
+      await locator.fill(value);
+      console.log(`Filled ${fieldLabel} using selector: ${selector}`);
+      return;
     } catch (error) {
-      console.warn('Failed to cache proxy list:', error.message);
+      console.log(`Selector ${selector} failed for ${fieldLabel}: ${error.message}`);
     }
   }
-  
-  return proxies;
+
+  throw new Error(`Could not locate ${fieldLabel} input on the page.`);
 }
 
-/**
- * Selects a random proxy from the list
- * @param {Array<string>} proxies Array of proxy URLs
- * @returns {string|null} Random proxy URL or null
- */
-function selectRandomProxy(proxies) {
-  if (!proxies || proxies.length === 0) return null;
-  const randomIndex = Math.floor(Math.random() * proxies.length);
-  return proxies[randomIndex];
+async function clickWithFallback(page, selectors, description) {
+  for (const selector of selectors) {
+    try {
+      const locator = page.locator(selector);
+      await locator.waitFor({ state: 'visible', timeout: 10000 });
+      await locator.scrollIntoViewIfNeeded();
+      await locator.click();
+      console.log(`Clicked ${description} using selector: ${selector}`);
+      return;
+    } catch (error) {
+      console.log(`Selector ${selector} failed for ${description}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Could not click ${description}; no selectors matched.`);
 }
 
 (async () => {
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
-
-  // Determine proxy configuration
-  let proxyConfig = null;
-  
-  if (process.env.PROXY_LIST_URL) {
-    // New method: Download proxy list and select random one
-    const proxies = await getProxyList();
-    const proxyUrl = selectRandomProxy(proxies);
-    
-    if (proxyUrl) {
-      console.log(`🎲 Selected random proxy: ${proxyUrl}`);
-      
-      // Parse proxy URL to extract credentials if present
-      // Format: http://username:password@IP:PORT or http://IP:PORT
-      try {
-        const url = new URL(proxyUrl);
-        const server = `${url.protocol}//${url.hostname}:${url.port}`;
-        
-        proxyConfig = { server };
-        
-        // Add credentials if present
-        if (url.username && url.password) {
-          proxyConfig.username = url.username;
-          proxyConfig.password = url.password;
-          console.log(`🔐 Using authenticated proxy: ${server} (user: ${url.username})`);
-        } else {
-          console.log(`🌐 Using direct proxy: ${server}`);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to parse proxy URL: ${error.message}`);
-        proxyConfig = null;
-      }
-    } else {
-      console.log('⚠️  No proxies available, using direct connection.');
-    }
-  } else if (process.env.PROXY_SERVER) {
-    // Fallback: Use static proxy server
-    const proxyUrl = process.env.PROXY_SERVER;
-    console.log(`🔧 Using static proxy: ${proxyUrl}`);
-    
-    try {
-      const url = new URL(proxyUrl);
-      const server = `${url.protocol}//${url.hostname}:${url.port}`;
-      
-      proxyConfig = { server };
-      
-      if (url.username && url.password) {
-        proxyConfig.username = url.username;
-        proxyConfig.password = url.password;
-      }
-    } catch (error) {
-      proxyConfig = { server: proxyUrl };
-    }
-  }
 
   const launchOptions = {
     headless: isCI,
@@ -188,13 +60,6 @@ function selectRandomProxy(proxies) {
       '--disable-setuid-sandbox'
     ]
   };
-
-  if (proxyConfig) {
-    launchOptions.proxy = proxyConfig;
-    console.log(`✅ Proxy configured successfully`);
-  } else {
-    console.log('🌐 No proxy configured; using direct connection.');
-  }
 
   const browser = await chromium.launch(launchOptions);
 
@@ -207,6 +72,8 @@ function selectRandomProxy(proxies) {
   });
 
   const page = await context.newPage();
+  const screenshotsDir = path.join(__dirname, '..', 'screenshots');
+  await ensureDir(screenshotsDir);
 
   try {
     console.log('Navigating to Naukri.com...');
@@ -228,8 +95,122 @@ function selectRandomProxy(proxies) {
       passwordField.waitFor({ state: 'visible', timeout: 30000 })
     ]);
     console.log('Email and password fields are visible.');
+
+    const emailSelectors = [
+      '#usernameField',
+      'input[type="text"][placeholder*="Email"]',
+      'input[type="text"][placeholder*="email"]',
+      'form[name="login-form"] input[type="text"]'
+    ];
+    const passwordSelectors = [
+      '#passwordField',
+      'form[name="login-form"] input[type="password"]',
+      'input[type="password"][placeholder*="Password"]'
+    ];
+
+    console.log('Entering credentials...');
+    await fillWithFallback(page, emailSelectors, process.env.USER_EMAIL, 'email');
+    await fillWithFallback(page, passwordSelectors, process.env.USER_PASSWORD, 'password');
+
+    console.log('Clicking sign-in button...');
+    const loginButtonSelectors = [
+      'form[name="login-form"] button[type="submit"]',
+      'button:has-text("Login")',
+      'input[type="submit"]',
+      'button.btn-primary[type="submit"]'
+    ];
+    await clickWithFallback(page, loginButtonSelectors, 'login button');
+
+    console.log('Waiting for login navigation...');
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {
+      console.log('Network idle wait timed out; continuing with URL checks.');
+    });
+
+    try {
+      await page.waitForURL('**/mnjuser/homepage', { timeout: 30000 });
+    } catch {
+      console.log('Homepage redirect not detected; verifying via profile link.');
+    }
+
+    const profileLink = page.locator('.view-profile-wrapper a[href="/mnjuser/profile"]');
+    await profileLink.waitFor({ state: 'visible', timeout: 30000 });
+    console.log('Login successful.');
+
+    console.log('Opening profile page...');
+    await profileLink.click();
+    await page.waitForLoadState('domcontentloaded');
+
+    const careerPreferencesHeading = page.locator('h1.section-heading:has-text("Your career preferences")');
+    await careerPreferencesHeading.waitFor({ state: 'visible', timeout: 30000 });
+    console.log('Career preferences section is visible.');
+
+    console.log('Opening career preferences editor...');
+    await careerPreferencesHeading.locator('.new-pencil').first().click();
+
+    const preferencesModal = page.locator('.styles_modal__gNwvD[role="dialog"]');
+    await preferencesModal.waitFor({ state: 'visible', timeout: 20000 });
+    await preferencesModal.locator('h1.title:has-text("Career preferences")').waitFor({ state: 'visible', timeout: 10000 });
+    console.log('Career preferences modal open.');
+
+    const kolkataChip = preferencesModal.locator('.selectedChips .chip:has-text("Kolkata")');
+    if (await kolkataChip.count() > 0) {
+      console.log('Kolkata already present. Removing to refresh.');
+      await kolkataChip.locator('.fn-chips-cross').click();
+      await kolkataChip.waitFor({ state: 'hidden', timeout: 10000 });
+    }
+
+    const locationInput = preferencesModal.locator('#location');
+    await locationInput.click();
+    await locationInput.fill('');
+
+    const targetCity = 'Kolkata';
+    for (const char of targetCity) {
+      await locationInput.type(char, { delay: 150 });
+    }
+    await page.waitForTimeout(800);
+
+    const suggestion = preferencesModal.locator('.sugItemWrapper:has-text("Kolkata")').first();
+    await suggestion.waitFor({ state: 'visible', timeout: 10000 });
+    await suggestion.click();
+    await preferencesModal.locator('.selectedChips .chip:has-text("Kolkata")').waitFor({ state: 'visible', timeout: 10000 });
+    console.log('Kolkata added to preferred locations.');
+
+    console.log('Saving career preferences...');
+    await preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")').click();
+    await preferencesModal.waitFor({ state: 'hidden', timeout: 20000 });
+    console.log('Career preferences saved.');
+
+    console.log('Opening user menu for logout...');
+    const menuIcon = page.locator('.nI-gNb-drawer__icon');
+    await menuIcon.click();
+    await page.waitForTimeout(500);
+
+    console.log('Clicking logout...');
+    const logoutLink = page.locator('a.nI-gNb-list-cta[title="Logout"]');
+    await logoutLink.waitFor({ state: 'visible', timeout: 15000 });
+    await logoutLink.click();
+
+    await page.locator('a#login_Layer.nI-gNb-lg-rg__login:has-text("Login")').waitFor({ state: 'visible', timeout: 30000 });
+    console.log('Logout successful.');
   } catch (error) {
-    console.error('Failed to load Naukri.com:', error.message);
+    console.error('Automation failed:', error.message);
+    const timestamp = Date.now();
+    try {
+      const screenshotPath = path.join(screenshotsDir, `error-${timestamp}.png`);
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      console.error(`Error screenshot saved: ${screenshotPath}`);
+    } catch (screenshotError) {
+      console.error(`Unable to capture error screenshot: ${screenshotError.message}`);
+    }
+
+    try {
+      const htmlPath = path.join(screenshotsDir, `error-${timestamp}.html`);
+      const htmlContent = await page.content();
+      await fs.promises.writeFile(htmlPath, htmlContent);
+      console.error(`Error HTML saved: ${htmlPath}`);
+    } catch (htmlError) {
+      console.error(`Unable to capture error HTML: ${htmlError.message}`);
+    }
   } finally {
     const video = typeof page.video === 'function' ? page.video() : null;
     try {

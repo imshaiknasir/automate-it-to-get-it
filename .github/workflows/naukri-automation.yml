@@ -38,8 +38,6 @@ jobs:
           echo "USER_EMAIL=${{ secrets.USER_EMAIL }}" >> .env
           echo "USER_PASSWORD=${{ secrets.USER_PASSWORD }}" >> .env
           echo "NAUKRI_URL=${{ secrets.NAUKRI_URL }}" >> .env
-          echo "PROXY_LIST_URL=${{ secrets.PROXY_LIST_URL }}" >> .env
-          echo "PROXY_SERVER=${{ secrets.PROXY_SERVER }}" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
       
@@ -60,7 +58,7 @@ jobs:
           if (missing) {
             process.exit(1);
           }
-          ['NAUKRI_URL', 'PROXY_LIST_URL', 'PROXY_SERVER', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].forEach(key => {
+          ['NAUKRI_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'].forEach(key => {
             const value = process.env[key];
             if (value) {
               console.log(`[Secrets] ${key} loaded (length ${value.length}).`);
@@ -73,8 +71,6 @@ jobs:
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
           USER_PASSWORD: ${{ secrets.USER_PASSWORD }}
           NAUKRI_URL: ${{ secrets.NAUKRI_URL }}
-          PROXY_LIST_URL: ${{ secrets.PROXY_LIST_URL }}
-          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       
