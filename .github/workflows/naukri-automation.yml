@@ -45,13 +45,7 @@ jobs:
           [ -n "${{ secrets.CV_FILE_1_EXT }}" ] && echo "CV_FILE_1_EXT=${{ secrets.CV_FILE_1_EXT }}" >> .env
           [ -n "${{ secrets.CV_FILE_2_BASE64 }}" ] && echo "CV_FILE_2_BASE64=${{ secrets.CV_FILE_2_BASE64 }}" >> .env
           [ -n "${{ secrets.CV_FILE_2_EXT }}" ] && echo "CV_FILE_2_EXT=${{ secrets.CV_FILE_2_EXT }}" >> .env
-          [ -n "${{ secrets.CV_FILE_3_BASE64 }}" ] && echo "CV_FILE_3_BASE64=${{ secrets.CV_FILE_3_BASE64 }}" >> .env
-          [ -n "${{ secrets.CV_FILE_3_EXT }}" ] && echo "CV_FILE_3_EXT=${{ secrets.CV_FILE_3_EXT }}" >> .env
-          [ -n "${{ secrets.CV_FILE_4_BASE64 }}" ] && echo "CV_FILE_4_BASE64=${{ secrets.CV_FILE_4_BASE64 }}" >> .env
-          [ -n "${{ secrets.CV_FILE_4_EXT }}" ] && echo "CV_FILE_4_EXT=${{ secrets.CV_FILE_4_EXT }}" >> .env
-          [ -n "${{ secrets.CV_FILE_5_BASE64 }}" ] && echo "CV_FILE_5_BASE64=${{ secrets.CV_FILE_5_BASE64 }}" >> .env
-          [ -n "${{ secrets.CV_FILE_5_EXT }}" ] && echo "CV_FILE_5_EXT=${{ secrets.CV_FILE_5_EXT }}" >> .env
-      
+
       - name: Verify secrets
         run: |
           node <<'NODE'
