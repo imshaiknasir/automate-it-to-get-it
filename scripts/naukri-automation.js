@@ -11,6 +11,61 @@ async function ensureDir(dirPath) {
   await fs.promises.mkdir(dirPath, { recursive: true });
 }
 
+/**
+ * Simulates human-like mouse movement to a target element before interacting
+ * @param {Page} page Playwright page object
+ * @param {Locator} locator Target element locator
+ */
+async function humanMouseMove(page, locator) {
+  try {
+    const box = await locator.boundingBox();
+    if (box) {
+      // Move to a random position near the element first
+      const nearX = box.x + Math.random() * box.width * 0.3;
+      const nearY = box.y + Math.random() * box.height * 0.3;
+      await page.mouse.move(nearX, nearY, { steps: Math.floor(Math.random() * 10) + 5 });
+      await page.waitForTimeout(Math.random() * 100 + 50);
+      
+      // Then move to the actual element
+      const targetX = box.x + box.width / 2 + (Math.random() - 0.5) * box.width * 0.3;
+      const targetY = box.y + box.height / 2 + (Math.random() - 0.5) * box.height * 0.3;
+      await page.mouse.move(targetX, targetY, { steps: Math.floor(Math.random() * 10) + 5 });
+      await page.waitForTimeout(Math.random() * 100 + 50);
+    }
+  } catch (error) {
+    // Silently fail if mouse movement fails
+  }
+}
+
+/**
+ * Types text with human-like variable speed and occasional pauses
+ * @param {Locator} locator Target input locator
+ * @param {string} text Text to type
+ */
+async function humanType(locator, text) {
+  for (let i = 0; i < text.length; i++) {
+    await locator.type(text[i], { delay: Math.random() * 150 + 50 });
+    
+    // Occasionally pause while typing (simulate thinking)
+    if (Math.random() < 0.15) {
+      await locator.page().waitForTimeout(Math.random() * 300 + 200);
+    }
+  }
+}
+
+/**
+ * Performs random scrolling to simulate natural browsing behavior
+ * @param {Page} page Playwright page object
+ */
+async function randomScroll(page) {
+  const scrolls = Math.floor(Math.random() * 3) + 1;
+  for (let i = 0; i < scrolls; i++) {
+    const scrollAmount = Math.floor(Math.random() * 300) + 100;
+    await page.mouse.wheel(0, scrollAmount);
+    await page.waitForTimeout(Math.random() * 500 + 300);
+  }
+}
+
 async function fillWithFallback(page, selectors, value, fieldLabel) {
   if (!value) {
     throw new Error(`Missing value for ${fieldLabel}. Check environment configuration.`);
@@ -20,7 +75,10 @@ async function fillWithFallback(page, selectors, value, fieldLabel) {
     try {
       const locator = page.locator(selector);
       await locator.waitFor({ state: 'visible', timeout: 10000 });
-      await locator.fill(value);
+      await humanMouseMove(page, locator);
+      await locator.click();
+      await page.waitForTimeout(Math.random() * 100 + 50);
+      await humanType(locator, value);
       console.log(`Filled ${fieldLabel} using selector: ${selector}`);
       return;
     } catch (error) {
@@ -37,6 +95,8 @@ async function clickWithFallback(page, selectors, description) {
       const locator = page.locator(selector);
       await locator.waitFor({ state: 'visible', timeout: 10000 });
       await locator.scrollIntoViewIfNeeded();
+      await humanMouseMove(page, locator);
+      await page.waitForTimeout(Math.random() * 100 + 50);
       await locator.click();
       console.log(`Clicked ${description} using selector: ${selector}`);
       return;
@@ -129,7 +189,26 @@ function cleanupTempFiles(tempDir) {
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--no-sandbox',
-      '--disable-setuid-sandbox'
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--allow-running-insecure-content',
+      '--disable-infobars',
+      '--disable-notifications',
+      '--disable-save-password-bubble',
+      '--disable-translate',
+      '--disable-popup-blocking',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-hang-monitor',
+      '--disable-prompt-on-repost',
+      '--metrics-recording-only',
+      '--no-first-run',
+      '--safebrowsing-disable-auto-update',
+      '--enable-automation',
+      '--password-store=basic',
+      '--use-mock-keychain'
     ]
   };
 
@@ -139,13 +218,49 @@ function cleanupTempFiles(tempDir) {
   await fs.promises.mkdir(videosDir, { recursive: true });
 
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    viewport: { width: 1920, height: 1080 },
+    locale: 'en-IN',
+    timezoneId: 'Asia/Kolkata',
+    geolocation: { latitude: 22.5726, longitude: 88.3639 },
+    permissions: ['geolocation'],
     recordVideo: { dir: videosDir, size: { width: 1280, height: 720 } }
   });
 
   const page = await context.newPage();
   const screenshotsDir = path.join(__dirname, '..', 'screenshots');
   await ensureDir(screenshotsDir);
+
+  // Inject scripts to hide automation markers
+  await page.addInitScript(() => {
+    // Overwrite the `navigator.webdriver` property
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+    });
+
+    // Overwrite the `navigator.plugins` to appear more realistic
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+
+    // Mock languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-IN', 'en-US', 'en'],
+    });
+
+    // Chrome runtime
+    window.chrome = {
+      runtime: {},
+    };
+
+    // Permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+    );
+  });
 
   try {
     console.log('Navigating to Naukri.com...');
@@ -156,6 +271,8 @@ function cleanupTempFiles(tempDir) {
     const loginButton = page.locator('a#login_Layer.nI-gNb-lg-rg__login[title="Jobseeker Login"]');
     await loginButton.waitFor({ state: 'visible', timeout: 30000 });
     console.log('Clicking Jobseeker Login button...');
+    await humanMouseMove(page, loginButton);
+    await page.waitForTimeout(Math.random() * 200 + 100);
     await loginButton.click();
     console.log('Jobseeker Login button clicked.');
 
@@ -208,16 +325,27 @@ function cleanupTempFiles(tempDir) {
     await profileLink.waitFor({ state: 'visible', timeout: 30000 });
     console.log('Login successful.');
 
+    // Simulate natural browsing with random scrolling
+    await randomScroll(page);
+
     console.log('Opening profile page...');
+    await humanMouseMove(page, profileLink);
+    await page.waitForTimeout(Math.random() * 200 + 100);
     await profileLink.click();
     await page.waitForLoadState('domcontentloaded');
+    
+    // Simulate natural browsing with random scrolling
+    await randomScroll(page);
 
     const careerPreferencesHeading = page.locator('h1.section-heading:has-text("Your career preferences")');
     await careerPreferencesHeading.waitFor({ state: 'visible', timeout: 30000 });
     console.log('Career preferences section is visible.');
 
     console.log('Opening career preferences editor...');
-    await careerPreferencesHeading.locator('.new-pencil').first().click();
+    const editIcon = careerPreferencesHeading.locator('.new-pencil').first();
+    await humanMouseMove(page, editIcon);
+    await page.waitForTimeout(Math.random() * 100 + 50);
+    await editIcon.click();
 
     const preferencesModal = page.locator('.styles_modal__gNwvD[role="dialog"]');
     await preferencesModal.waitFor({ state: 'visible', timeout: 20000 });
@@ -232,23 +360,28 @@ function cleanupTempFiles(tempDir) {
     }
 
     const locationInput = preferencesModal.locator('#location');
+    await humanMouseMove(page, locationInput);
+    await page.waitForTimeout(Math.random() * 100 + 50);
     await locationInput.click();
     await locationInput.fill('');
 
     const targetCity = 'Kolkata';
-    for (const char of targetCity) {
-      await locationInput.type(char, { delay: 150 });
-    }
+    await humanType(locationInput, targetCity);
     await page.waitForTimeout(800);
 
     const suggestion = preferencesModal.locator('.sugItemWrapper:has-text("Kolkata")').first();
     await suggestion.waitFor({ state: 'visible', timeout: 10000 });
+    await humanMouseMove(page, suggestion);
+    await page.waitForTimeout(Math.random() * 100 + 50);
     await suggestion.click();
     await preferencesModal.locator('.selectedChips .chip:has-text("Kolkata")').waitFor({ state: 'visible', timeout: 10000 });
     console.log('Kolkata added to preferred locations.');
 
     console.log('Saving career preferences...');
-    await preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")').click();
+    const saveButton = preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")');
+    await humanMouseMove(page, saveButton);
+    await page.waitForTimeout(Math.random() * 100 + 50);
+    await saveButton.click();
     await preferencesModal.waitFor({ state: 'hidden', timeout: 20000 });
     console.log('Career preferences saved.');
 
@@ -325,12 +458,16 @@ function cleanupTempFiles(tempDir) {
 
     console.log('Opening user menu for logout...');
     const menuIcon = page.locator('.nI-gNb-drawer__icon');
+    await humanMouseMove(page, menuIcon);
+    await page.waitForTimeout(Math.random() * 100 + 50);
     await menuIcon.click();
     await page.waitForTimeout(500);
 
     console.log('Clicking logout...');
     const logoutLink = page.locator('a.nI-gNb-list-cta[title="Logout"]');
     await logoutLink.waitFor({ state: 'visible', timeout: 15000 });
+    await humanMouseMove(page, logoutLink);
+    await page.waitForTimeout(Math.random() * 100 + 50);
     await logoutLink.click();
 
     await page.locator('a#login_Layer.nI-gNb-lg-rg__login:has-text("Login")').waitFor({ state: 'visible', timeout: 30000 });

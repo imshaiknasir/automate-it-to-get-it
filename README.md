@@ -13,6 +13,29 @@ The script performs the following tasks:
 3. **Random CV Upload**: Randomly selects and uploads one CV from multiple stored resumes (optional)
 4. **Logout**: Logs out from the application
 
+### 🛡️ Enhanced Anti-Detection & Stealth Features
+
+This script includes advanced stealth capabilities to make automation harder to detect:
+
+**Human-like Behaviors:**
+- ✨ **Random Mouse Movements**: Simulates natural mouse paths before clicking elements
+- ⌨️ **Variable Typing Speeds**: Types with random delays (50-200ms) and occasional thinking pauses
+- 📜 **Natural Scrolling**: Random scrolling behavior at strategic points to mimic browsing
+- ⏱️ **Random Delays**: Variable wait times between actions
+
+**Realistic Browser Fingerprints:**
+- 🌍 **Geolocation**: Set to Kolkata coordinates (22.5726°N, 88.3639°E)
+- 🕐 **Timezone**: Asia/Kolkata
+- 🗣️ **Locale**: en-IN (Indian English)
+- 🖥️ **Viewport**: 1920x1080 (common desktop resolution)
+- 🌐 **User Agent**: Latest Chrome 131.0.0.0
+
+**Anti-Detection Measures:**
+- 🎭 **Stealth Plugin**: Uses puppeteer-extra-plugin-stealth with playwright-extra
+- 🚫 **Automation Markers Hidden**: Removes `navigator.webdriver` and other detection markers
+- 🔧 **Enhanced Chrome Arguments**: Comprehensive flags to avoid detection
+- 🎨 **Script Injection**: Custom scripts to mask automation fingerprints
+
 ## Setup
 
 1. Install dependencies:
@@ -129,10 +152,12 @@ Edit `playwright.config.js` to customize:
 
 ## Notes
 
-- The script uses Playwright's browser automation (not @playwright/test)
+- The script uses Playwright's browser automation (not @playwright/test) with playwright-extra for plugin support
+- Enhanced with puppeteer-extra-plugin-stealth for anti-detection capabilities
 - All actions include appropriate waits and error handling
 - The script runs in headed mode by default to visualize the automation
-- Human-like typing delays are implemented for the location input field
+- Human-like behaviors (mouse movements, variable typing, random scrolling) make automation harder to detect
+- Realistic browser fingerprints configured for Kolkata, India
 - CV upload is optional and gracefully skips if no CV secrets are configured
 - Random CV selection helps avoid detection patterns
 
