@@ -1,5 +1,7 @@
 # Naukri.com Automation Script
 
+[![Run Automation](https://img.shields.io/badge/▶️_Run_Automation-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/imshaiknasir/automate-it-to-get-it/actions/workflows/naukri-automation.yml)
+
 This is a Playwright-based automation script (NOT a test) that automates interactions with Naukri.com.
 
 ## Features
@@ -23,45 +25,39 @@ USER_EMAIL=your_email@example.com
 USER_PASSWORD=your_password
 NAUKRI_URL=https://www.naukri.com/nlogin/login
 
-# Proxy Configuration (Optional)
-PROXY_LIST_URL=https://proxy.webshare.io/api/v2/proxy/list/download/YOUR_TOKEN/-/any/username/direct/-/?plan_id=YOUR_PLAN_ID
+# Optional: Telegram notifications
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
-### Proxy Configuration
+### GitHub Actions Secrets
 
-The script supports two proxy methods:
-
-**Method 1: Dynamic Proxy List (Recommended)**
-- Set `PROXY_LIST_URL` with your WebShare.io download link
-- The script will:
-  - Download the full proxy list on first run
-  - Cache it locally for 24 hours (`.proxy-cache.json`)
-  - Randomly select one proxy per session for consistency
-  - Refresh cache after 24 hours
-
-**Method 2: Static Proxy (Fallback)**
-- Set `PROXY_SERVER=http://IP:PORT` for a single proxy
-- Used only if `PROXY_LIST_URL` is not configured
-
-**Benefits of Method 1:**
-- ✅ No authentication overhead (direct connection)
-- ✅ Random proxy selection per run
-- ✅ Session consistency (same IP throughout one run)
-- ✅ Automatic cache management
-- ✅ Better reliability with multiple proxies
+For automated runs via GitHub Actions, configure these secrets in your repository:
+- `USER_EMAIL` - Your Naukri.com email (required)
+- `USER_PASSWORD` - Your Naukri.com password (required)
+- `NAUKRI_URL` - Login URL (optional, defaults to Naukri login page)
+- `TELEGRAM_BOT_TOKEN` - For notifications (optional)
+- `TELEGRAM_CHAT_ID` - For notifications (optional)
 
 ## Usage
 
-Run the automation script:
+### Run Locally
 ```bash
 npm run automate
 ```
 
+### Run via GitHub Actions (One-Click)
+Click the **"Run Automation"** badge at the top of this README, or:
+1. Go to the [Actions tab](https://github.com/imshaiknasir/automate-it-to-get-it/actions/workflows/naukri-automation.yml)
+2. Click "Run workflow" button
+3. Optionally add a reason and click "Run workflow"
+
 The script will:
-- Open a browser window (headed mode)
+- Open a browser window (headed mode locally, headless in CI)
 - Execute all three tasks sequentially
 - Provide console output for each step
 - Close the browser automatically when done
+- Upload screenshots and videos as artifacts (CI only)
 
 ## Configuration
 
