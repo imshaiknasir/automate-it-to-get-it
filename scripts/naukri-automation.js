@@ -133,9 +133,17 @@ function cleanupTempFiles(tempDir) {
 
 (async () => {
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+  const hasDisplay = !!process.env.DISPLAY; // Check if DISPLAY is set (Xvfb or local X11)
+
+  // Auto-detect: Use headless in CI unless DISPLAY is available (Xvfb setup)
+  // Locally: Use headed mode (DISPLAY usually set, or headless works on macOS)
+  const shouldUseHeadless = isCI && !hasDisplay;
+  
+  console.log(`Running in ${shouldUseHeadless ? 'headless' : 'headed'} mode`);
+  console.log(`Environment: ${isCI ? 'CI' : 'Local'}${hasDisplay ? ` (DISPLAY=${process.env.DISPLAY})` : ''}`);
 
   const launchOptions = {
-    headless: isCI,
+    headless: shouldUseHeadless,
     args: [
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',

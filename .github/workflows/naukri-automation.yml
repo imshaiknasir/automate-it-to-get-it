@@ -8,6 +8,11 @@ on:
         description: 'Reason for running'
         required: false
         default: 'Manual trigger'
+      headed_mode:
+        description: 'Run browser in headed mode (with virtual display)'
+        required: false
+        type: boolean
+        default: false
   
   # Scheduled runs - daily at 8:30 AM IST (03:00 UTC) and 11:30 AM IST (06:00 UTC)
   schedule:
@@ -33,6 +38,18 @@ jobs:
       
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
+      
+      - name: Setup virtual display (Xvfb)
+        if: github.event.inputs.headed_mode == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          # Start Xvfb on display :99 with 1920x1080 resolution
+          Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          # Wait for Xvfb to start
+          sleep 2
+          echo "DISPLAY=:99" >> $GITHUB_ENV
+          echo "✅ Virtual display started on :99 - headed mode will be auto-enabled"
       
       - name: Create .env file
         run: |
