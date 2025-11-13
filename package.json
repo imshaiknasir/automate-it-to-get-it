@@ -16,7 +16,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "automate": "node scripts/naukri-automation.js"
+    "automate": "node scripts/naukri-automation.js",
+    "validate-flags": "node scripts/validate-flags.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1"

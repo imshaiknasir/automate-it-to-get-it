@@ -35,6 +35,7 @@ This script includes advanced stealth capabilities to make automation harder to 
 - 🚫 **Automation Markers Hidden**: Removes `navigator.webdriver` and other detection markers
 - 🔧 **Enhanced Chrome Arguments**: Comprehensive flags to avoid detection
 - 🎨 **Script Injection**: Custom scripts to mask automation fingerprints
+- 📋 **Validated Configuration**: See [BROWSER_FLAGS_ANALYSIS.md](./BROWSER_FLAGS_ANALYSIS.md) for detailed analysis
 
 ## Setup
 
@@ -106,6 +107,12 @@ For automated runs via GitHub Actions, configure these secrets in your repositor
 5. Click **"Add secret"**
 
 ## Usage
+
+### Validate Browser Flags (Optional)
+To verify that all anti-detection flags are properly configured:
+```bash
+npm run validate-flags
+```
 
 ### Run Locally
 ```bash
