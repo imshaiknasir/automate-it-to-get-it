@@ -8,11 +8,6 @@ on:
         description: 'Reason for running'
         required: false
         default: 'Manual trigger'
-      headed_mode:
-        description: 'Run browser in headed mode (with virtual display)'
-        required: false
-        type: boolean
-        default: false
   
   # Scheduled runs - daily at 8:30 AM IST (03:00 UTC) and 11:30 AM IST (06:00 UTC)
   schedule:
