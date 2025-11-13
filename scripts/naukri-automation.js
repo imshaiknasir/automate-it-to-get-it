@@ -1,3 +1,16 @@
+/**
+ * Naukri.com Automation Script with Advanced Anti-Detection
+ * 
+ * This script uses multiple layers of stealth techniques:
+ * 1. puppeteer-extra-plugin-stealth: 20+ evasion techniques (navigator.webdriver masking, etc.)
+ * 2. Custom Chrome flags: Optimized browser launch arguments
+ * 3. Realistic browser fingerprint: User-agent, timezone, geolocation for Kolkata, India
+ * 4. Human-like behaviors: Random mouse movements, variable typing speed, natural scrolling
+ * 5. Custom script injection: Additional fingerprint masking (navigator properties, chrome object)
+ * 
+ * For detailed analysis of all flags and techniques, see: BROWSER_FLAGS_ANALYSIS.md
+ */
+
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 const fs = require('fs');
@@ -5,6 +18,12 @@ const path = require('path');
 require('dotenv').config();
 
 // Enable stealth plugin to reduce automation fingerprints
+// This automatically applies 20+ evasion techniques including:
+// - navigator.webdriver masking
+// - Chrome runtime mocking
+// - Plugin/mimetype emulation
+// - WebGL vendor spoofing
+// - And many more...
 chromium.use(stealth);
 
 async function ensureDir(dirPath) {
@@ -13,6 +32,10 @@ async function ensureDir(dirPath) {
 
 /**
  * Simulates human-like mouse movement to a target element before interacting
+ * 
+ * Anti-detection benefit: Real users don't instantly click at exact element centers.
+ * This function creates a curved path with random intermediate points and variable speed.
+ * 
  * @param {Page} page Playwright page object
  * @param {Locator} locator Target element locator
  */
@@ -39,6 +62,11 @@ async function humanMouseMove(page, locator) {
 
 /**
  * Types text with human-like variable speed and occasional pauses
+ * 
+ * Anti-detection benefit: Bots type at consistent speeds, humans vary.
+ * - Variable delay: 50-200ms per character
+ * - 15% chance of "thinking pause" (200-500ms) between characters
+ * 
  * @param {Locator} locator Target input locator
  * @param {string} text Text to type
  */
@@ -55,6 +83,12 @@ async function humanType(locator, text) {
 
 /**
  * Performs random scrolling to simulate natural browsing behavior
+ * 
+ * Anti-detection benefit: Real users browse and scroll around pages.
+ * This function performs 1-4 random scrolls at strategic points with:
+ * - Variable scroll amounts: 100-400px
+ * - Random delays: 300-800ms between scrolls
+ * 
  * @param {Page} page Playwright page object
  */
 async function randomScroll(page) {
@@ -186,29 +220,44 @@ function cleanupTempFiles(tempDir) {
   const launchOptions = {
     headless: isCI,
     args: [
-      '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--allow-running-insecure-content',
-      '--disable-infobars',
-      '--disable-notifications',
-      '--disable-save-password-bubble',
-      '--disable-translate',
-      '--disable-popup-blocking',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-hang-monitor',
-      '--disable-prompt-on-repost',
-      '--metrics-recording-only',
-      '--no-first-run',
-      '--safebrowsing-disable-auto-update',
-      '--enable-automation',
-      '--password-store=basic',
-      '--use-mock-keychain'
+      // ===== CRITICAL: Primary anti-detection flag =====
+      '--disable-blink-features=AutomationControlled', // Removes navigator.webdriver flag (essential for stealth)
+      
+      // ===== Environment stability flags (required for CI/Docker) =====
+      '--disable-dev-shm-usage',                       // Prevents /dev/shm exhaustion in containerized environments
+      '--no-sandbox',                                  // Disables Chrome sandbox (required for Docker/CI)
+      '--disable-setuid-sandbox',                      // Disables setuid sandbox (required for unprivileged containers)
+      
+      // ===== Security flags (use with caution - may create detectable fingerprint) =====
+      '--disable-web-security',                        // Disables same-origin policy
+      '--disable-features=IsolateOrigins,site-per-process', // Disables site isolation
+      '--allow-running-insecure-content',              // Allows mixed HTTP/HTTPS content
+      
+      // ===== UI & notification suppressions =====
+      '--disable-infobars',                            // Hides "Chrome is being controlled" infobar
+      '--disable-notifications',                       // Disables notification prompts
+      '--disable-save-password-bubble',                // Disables password save prompts
+      '--disable-translate',                           // Disables translation prompts
+      '--disable-popup-blocking',                      // Allows popups (useful for automation)
+      
+      // ===== Performance & timing consistency =====
+      '--disable-background-timer-throttling',         // Prevents timer throttling in background
+      '--disable-backgrounding-occluded-windows',      // Prevents backgrounding of occluded windows
+      '--disable-renderer-backgrounding',              // Prevents renderer process backgrounding
+      
+      // ===== System & monitoring =====
+      '--disable-hang-monitor',                        // Disables hang detection
+      '--disable-prompt-on-repost',                    // Disables form resubmission prompts
+      '--metrics-recording-only',                      // Limits metrics collection
+      '--no-first-run',                                // Skips first-run wizards
+      '--safebrowsing-disable-auto-update',            // Disables safe browsing updates
+      
+      // ===== NOTE: --enable-automation flag removed - it enables detection markers =====
+      // Previously: '--enable-automation' (REMOVED - contradicted stealth efforts)
+      
+      // ===== Storage & keychain =====
+      '--password-store=basic',                        // Uses basic password storage
+      '--use-mock-keychain'                            // Uses mock keychain (macOS)
     ]
   };
 
@@ -217,43 +266,46 @@ function cleanupTempFiles(tempDir) {
   const videosDir = path.join(__dirname, '..', 'videos');
   await fs.promises.mkdir(videosDir, { recursive: true });
 
+  // Create browser context with realistic fingerprint for Indian user
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    viewport: { width: 1920, height: 1080 },
-    locale: 'en-IN',
-    timezoneId: 'Asia/Kolkata',
-    geolocation: { latitude: 22.5726, longitude: 88.3639 },
-    permissions: ['geolocation'],
-    recordVideo: { dir: videosDir, size: { width: 1280, height: 720 } }
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36', // Latest Chrome 131
+    viewport: { width: 1920, height: 1080 },           // Common desktop resolution
+    locale: 'en-IN',                                    // Indian English locale
+    timezoneId: 'Asia/Kolkata',                         // Indian Standard Time (IST)
+    geolocation: { latitude: 22.5726, longitude: 88.3639 }, // Kolkata coordinates
+    permissions: ['geolocation'],                       // Grant geolocation permission
+    recordVideo: { dir: videosDir, size: { width: 1280, height: 720 } } // Record session for debugging
   });
 
   const page = await context.newPage();
   const screenshotsDir = path.join(__dirname, '..', 'screenshots');
   await ensureDir(screenshotsDir);
 
-  // Inject scripts to hide automation markers
+  // Inject custom scripts to mask additional automation fingerprints
+  // Note: These work in conjunction with the stealth plugin for redundant protection
   await page.addInitScript(() => {
-    // Overwrite the `navigator.webdriver` property
+    // Ensure navigator.webdriver returns undefined (not false or true)
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined,
     });
 
-    // Overwrite the `navigator.plugins` to appear more realistic
+    // Provide plugin array (headless Chrome has no plugins by default)
+    // Stealth plugin provides more realistic mocking, this is additional protection
     Object.defineProperty(navigator, 'plugins', {
       get: () => [1, 2, 3, 4, 5],
     });
 
-    // Mock languages
+    // Set realistic language preferences for Indian users
     Object.defineProperty(navigator, 'languages', {
       get: () => ['en-IN', 'en-US', 'en'],
     });
 
-    // Chrome runtime
+    // Add chrome runtime object (missing in headless mode)
     window.chrome = {
       runtime: {},
     };
 
-    // Permissions
+    // Handle notification permission queries naturally
     const originalQuery = window.navigator.permissions.query;
     window.navigator.permissions.query = (parameters) => (
       parameters.name === 'notifications' ?
