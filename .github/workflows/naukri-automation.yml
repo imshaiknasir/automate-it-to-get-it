@@ -40,7 +40,6 @@ jobs:
         run: npx playwright install chromium --with-deps
       
       - name: Setup virtual display (Xvfb)
-        if: github.event.inputs.headed_mode == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb
@@ -49,7 +48,7 @@ jobs:
           # Wait for Xvfb to start
           sleep 2
           echo "DISPLAY=:99" >> $GITHUB_ENV
-          echo "✅ Virtual display started on :99 - headed mode will be auto-enabled"
+          echo "✅ Virtual display started on :99 - headed mode enabled"
       
       - name: Create .env file
         run: |
