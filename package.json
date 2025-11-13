@@ -18,12 +18,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "automate": "node scripts/naukri-automation.js"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.56.1"
-  },
   "dependencies": {
     "dotenv": "^17.2.3",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "playwright": "^1.56.1"
   }
 }

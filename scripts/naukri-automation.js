@@ -1,11 +1,7 @@
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
+const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
-
-// Enable stealth plugin to reduce automation fingerprints
-chromium.use(stealth);
 
 async function ensureDir(dirPath) {
   await fs.promises.mkdir(dirPath, { recursive: true });
@@ -20,7 +16,16 @@ async function fillWithFallback(page, selectors, value, fieldLabel) {
     try {
       const locator = page.locator(selector);
       await locator.waitFor({ state: 'visible', timeout: 10000 });
-      await locator.fill(value);
+      
+      // Human-like typing with random delays
+      await locator.click();
+      await page.waitForTimeout(100 + Math.random() * 200);
+      await locator.fill('');
+      
+      for (const char of value) {
+        await locator.type(char, { delay: 50 + Math.random() * 100 });
+      }
+      
       console.log(`Filled ${fieldLabel} using selector: ${selector}`);
       return;
     } catch (error) {
@@ -37,7 +42,13 @@ async function clickWithFallback(page, selectors, description) {
       const locator = page.locator(selector);
       await locator.waitFor({ state: 'visible', timeout: 10000 });
       await locator.scrollIntoViewIfNeeded();
+      
+      // Human-like behavior: hover before clicking
+      await locator.hover();
+      await page.waitForTimeout(100 + Math.random() * 300);
       await locator.click();
+      await page.waitForTimeout(200 + Math.random() * 400);
+      
       console.log(`Clicked ${description} using selector: ${selector}`);
       return;
     } catch (error) {
@@ -129,7 +140,12 @@ function cleanupTempFiles(tempDir) {
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
       '--no-sandbox',
-      '--disable-setuid-sandbox'
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--lang=en-IN',
+      '--window-size=1920,1080'
     ]
   };
 
@@ -138,18 +154,64 @@ function cleanupTempFiles(tempDir) {
   const videosDir = path.join(__dirname, '..', 'videos');
   await fs.promises.mkdir(videosDir, { recursive: true });
 
+  // Add viewport randomization for more natural appearance
+  const viewportWidth = 1920 + Math.floor(Math.random() * 100);
+  const viewportHeight = 1080 + Math.floor(Math.random() * 100);
+
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: { width: viewportWidth, height: viewportHeight },
+    deviceScaleFactor: 1,
+    locale: 'en-IN',
+    timezoneId: 'Asia/Kolkata',
+    geolocation: { longitude: 88.3639, latitude: 22.5726 },
+    permissions: ['geolocation'],
+    hasTouch: false,
+    isMobile: false,
+    colorScheme: 'light',
     recordVideo: { dir: videosDir, size: { width: 1280, height: 720 } }
   });
 
   const page = await context.newPage();
+  
+  // Inject scripts to mask automation detection
+  await page.addInitScript(() => {
+    // Overwrite the `navigator.webdriver` property
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined,
+    });
+
+    // Overwrite the `plugins` property to add fake plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+
+    // Overwrite the `languages` property
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['en-US', 'en', 'en-IN'],
+    });
+
+    // Add chrome runtime object
+    window.chrome = {
+      runtime: {},
+    };
+
+    // Mock permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications' ?
+        Promise.resolve({ state: Notification.permission }) :
+        originalQuery(parameters)
+    );
+  });
+  
   const screenshotsDir = path.join(__dirname, '..', 'screenshots');
   await ensureDir(screenshotsDir);
 
   try {
     console.log('Navigating to Naukri.com...');
     await page.goto('https://www.naukri.com/', { waitUntil: 'domcontentloaded', timeout: isCI ? 90000 : 60000 });
+    await page.waitForTimeout(1000 + Math.random() * 2000);
     console.log('Page loaded.');
 
     console.log('Waiting for Jobseeker Login button...');
