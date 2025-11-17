@@ -142,7 +142,6 @@ If you want this automation to run automatically at **08:30** and **11:30** IST,
 	```bash
 	cp example.env .env
 	nano .env # fill credentials, NAUKRI_TOGGLE_CITY, HEADLESS, etc.
-	sudo timedatectl set-timezone Asia/Kolkata # ensures server follows IST
 	```
 3. **Start the scheduler**
 	```bash
@@ -150,7 +149,7 @@ If you want this automation to run automatically at **08:30** and **11:30** IST,
 	pm2 save
 	pm2 startup systemd
 	```
-   - `scripts/scheduler.js` registers two cron-style jobs using `pm2-schedule`.
+	   - `scripts/scheduler.js` registers two cron-style jobs using `node-cron` with `Asia/Kolkata` timezone baked in.
    - Each job spawns `node scripts/naukri-automation.js` so the original script remains unchanged.
    - `ecosystem.config.js` keeps the scheduler alive and restarts it if it crashes.
 4. **Monitor**
@@ -159,7 +158,7 @@ If you want this automation to run automatically at **08:30** and **11:30** IST,
 	pm2 logs scheduler
 	```
 
-> Alternative: If you cannot change the server timezone, convert the IST schedules to your server's timezone and adjust the cron expressions in `scripts/scheduler.js` accordingly.
+> Timezone tip: the scheduler already targets `Asia/Kolkata`, so the jobs fire at 08:30/11:30 IST regardless of the VPS timezone. Setting the server timezone to IST is optional but can make log timestamps easier to reason about.
 
 To stop or restart the automation daemon:
 
