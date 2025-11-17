@@ -14,6 +14,8 @@ const HOME_URL = 'https://www.naukri.com/';
 const REGISTER_URL_MATCHER = /registration\/createAccount/i;
 const LOGIN_URL_MATCHER = /nlogin\/login/i;
 
+const PREFERRED_LOCATION = process.env.NAUKRI_TOGGLE_CITY || 'Kolkata';
+
 const HEADLESS = process.env.HEADLESS === 'true';
 
 function requireCredentials() {
@@ -72,7 +74,7 @@ async function confirmLogin(page) {
 	}
 }
 
-async function openProfileAndToggleLocation(page) {
+async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata') {
 	const profileLink = page.locator('.view-profile-wrapper a[href="/mnjuser/profile"]');
 	await profileLink.waitFor({ state: 'visible', timeout: 30000 });
 	console.log('Login confirmed. Opening profile page...');
@@ -91,34 +93,34 @@ async function openProfileAndToggleLocation(page) {
 	await preferencesModal.locator('h1.title:has-text("Career preferences")').waitFor({ state: 'visible', timeout: 10000 });
 	console.log('Career preferences modal open.');
 
-	const kolkataChip = preferencesModal.locator('.selectedChips .chip:has-text("Kolkata")');
-	if (await kolkataChip.count() > 0) {
-		console.log('Kolkata already present. Removing to toggle off.');
-		const removeIcon = kolkataChip.locator('.fn-chips-cross');
+	const locationChip = preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`);
+	if (await locationChip.count() > 0) {
+		console.log(`${cityName} already present. Removing to toggle off.`);
+		const removeIcon = locationChip.locator('.fn-chips-cross');
 		await removeIcon.first().waitFor({ state: 'visible', timeout: 10000 });
 		await removeIcon.first().click();
-		// Wait for any "Kolkata" chip to disappear from selected chips
+		// Wait for any matching chip to disappear from selected chips
 		await preferencesModal
-			.locator('.selectedChips .chip:has-text("Kolkata")')
+			.locator(`.selectedChips .chip:has-text("${cityName}")`)
 			.first()
 			.waitFor({ state: 'detached', timeout: 10000 }).catch(() => {
-				console.warn('Timed out waiting for Kolkata chip to be detached; continuing.');
+				console.warn(`Timed out waiting for ${cityName} chip to be detached; continuing.`);
 			});
 	} else {
-		console.log('Kolkata not present. Adding to toggle on.');
+		console.log(`${cityName} not present. Adding to toggle on.`);
 		const locationInput = preferencesModal.locator('#location');
 		await locationInput.click();
 		await locationInput.fill('');
 
-		const targetCity = 'Kolkata';
+		const targetCity = cityName;
 		await locationInput.type(targetCity, { delay: 120 });
 		await page.waitForTimeout(800);
 
-		const suggestion = preferencesModal.locator('.sugItemWrapper:has-text("Kolkata")').first();
+		const suggestion = preferencesModal.locator(`.sugItemWrapper:has-text("${cityName}")`).first();
 		await suggestion.waitFor({ state: 'visible', timeout: 10000 });
 		await suggestion.click();
-		await preferencesModal.locator('.selectedChips .chip:has-text("Kolkata")').waitFor({ state: 'visible', timeout: 10000 });
-		console.log('Kolkata added to preferred locations.');
+		await preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`).waitFor({ state: 'visible', timeout: 10000 });
+		console.log(`${cityName} added to preferred locations.`);
 	}
 
 	console.log('Saving career preferences...');
@@ -168,8 +170,8 @@ async function main() {
 			console.log(`Login successful. Storage state saved to ${STORAGE_FILE}`);
 		}
 
-		// After we have a valid session, open profile and toggle location.
-		await openProfileAndToggleLocation(page);
+		// After we have a valid session, open profile and toggle preferred location.
+		await openProfileAndTogglePreferredLocation(page, PREFERRED_LOCATION);
 	} finally {
 		await browser.close();
 	}
