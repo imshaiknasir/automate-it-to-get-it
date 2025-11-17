@@ -24,6 +24,9 @@ temp/
 # Videos
 videos/
 
+# Browser session state
+storage-states/
+
 # Temporary CV files
 temp-cvs/
 
