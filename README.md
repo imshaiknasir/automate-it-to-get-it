@@ -245,3 +245,16 @@ and re‑enable it later when needed.
 - Storage state is local only and should **not** be committed to Git.
 
 If you notice selectors breaking after a Naukri UI change, update `scripts/naukri-automation.js` with the new DOM and rerun `npm run automate`.
+
+---
+
+## 10. Deep-Dive Documentation
+
+Need the full architecture map for PM2, the scheduler, automation script, and storage state? Check `docs/automation-stack-guide.md` for:
+
+- Mermaid mindmap of the entire stack
+- Component responsibilities and flow diagrams
+- Storage-state lifecycle, scheduler matrix, and PM2 cheat sheet
+- First-time setup checklist for new contributors
+
+Use that guide as the onboarding reference when sharing this project.
