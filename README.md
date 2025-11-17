@@ -170,7 +170,57 @@ pm2 delete scheduler
 
 ---
 
-## 7. Customizing Behavior
+## 7. VPS Setup (Ubuntu + PM2 + Xvfb)
+
+For a headless Ubuntu VPS where Chromium needs a virtual display, follow these steps:
+
+1. **Install system dependencies**
+	```bash
+	sudo apt update
+	sudo apt install -y git curl xvfb
+	curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+	sudo apt install -y nodejs
+	sudo npm install -g pm2
+	```
+2. **Clone and configure the project**
+	```bash
+	git clone https://github.com/imshaiknasir/automate-it-to-get-it.git
+	cd automate-it-to-get-it
+	cp example.env .env
+	nano .env   # fill USER_EMAIL, USER_PASSWORD, NAUKRI_TOGGLE_CITY, HEADLESS, etc.
+	npm install
+	```
+3. **Run the scheduler under Xvfb with PM2**
+	```bash
+	pm2 delete scheduler 2>/dev/null || true
+	pm2 start --name scheduler --interpreter bash -- 'xvfb-run -a node scripts/scheduler.js'
+	pm2 save
+	pm2 startup systemd
+	```
+	- `xvfb-run -a` launches a lightweight virtual display so Chromium can render without a physical GPU.
+	- PM2 keeps the scheduler alive and restarts it on reboot (after `pm2 startup systemd` and `pm2 save`).
+4. **Manual one-off run (optional)**
+	```bash
+	xvfb-run -a npm run automate
+	```
+	Useful for testing changes without touching the PM2-managed daemon.
+
+Logs:
+
+```bash
+pm2 logs scheduler
+pm2 list
+```
+
+Remove the daemon if needed:
+
+```bash
+pm2 delete scheduler
+```
+
+---
+
+## 8. Customizing Behavior
 
 You can adjust behavior without touching the code by changing env vars:
 
@@ -188,7 +238,7 @@ and re‑enable it later when needed.
 
 ---
 
-## 8. Notes & Limitations
+## 9. Notes & Limitations
 
 - The script assumes Naukri’s DOM structure is similar to the selectors used (login fields, profile link, career preferences modal). If Naukri changes their UI, selectors may need updates.
 - No proxy/fingerprint randomization is intentionally used; the browser profile is meant to stay stable over time.
