@@ -46,7 +46,24 @@ USER_PASSWORD=your_password
 NAUKRI_TOGGLE_CITY=Kolkata
 ```
 
-> Note: other entries in `example.env` (CV uploads, proxies, Telegram) are not used by the current script.
+> Note: the other entries in `example.env` (CV uploads, proxies, Telegram notifications) are optional—fill them only if you need those features.
+
+### Telegram Notifications (Optional)
+
+If you want every automation run to report its status to Telegram, follow these steps:
+
+1. **Create your bot** – Talk to [`@BotFather`](https://t.me/BotFather), run `/newbot`, and copy the `TELEGRAM_BOT_TOKEN` it returns.
+2. **Invite the bot to your chat** – Add it to your private chat or channel where you want the updates delivered. For channels, make the bot an admin so it can post.
+3. **Find your chat ID** – Either forward a message to [`@userinfobot`](https://t.me/userinfobot) or send a message in the channel and visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` to read the `chat.id` value (channel IDs start with `-100`).
+4. **Configure `.env`** – Add both values:
+
+	```dotenv
+	TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+	TELEGRAM_CHAT_ID=-1001234567890
+	TELEGRAM_ATTACH_EXECUTION_LOG=false
+	```
+
+That’s it. Successful runs send a ✅ summary, failures send a ❌ summary with the error message and stack trace. Set `TELEGRAM_ATTACH_EXECUTION_LOG=true` if you also want the daily execution log file attached to each message. If any Telegram env var is missing, the notifier silently skips sending so you can leave them blank when Telegram isn’t needed.
 
 ---
 

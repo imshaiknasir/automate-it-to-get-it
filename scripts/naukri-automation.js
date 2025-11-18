@@ -8,6 +8,7 @@ const {
 	STORAGE_FILE,
 } = require('./utils/storage-state');
 const { logger, logExecution, generateExecutionId, formatDuration } = require('./utils/logger');
+const { sendExecutionNotification } = require('./utils/telegram-notifier');
 
 const ENV_PATH = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: ENV_PATH });
@@ -227,6 +228,7 @@ async function main() {
 
 		logExecution(summary);
 		logger.info('Automation completed successfully', summary);
+		await sendExecutionNotification(summary);
 	} catch (error) {
 		success = false;
 		const duration = Date.now() - startTime;
@@ -245,6 +247,7 @@ async function main() {
 
 		logExecution(errorSummary);
 		logger.error('Automation failed', errorSummary);
+		await sendExecutionNotification(errorSummary);
 		throw error;
 	} finally {
 		// Get video path before closing context
