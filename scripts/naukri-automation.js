@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('fs').promises;
 const { chromium, devices } = require('playwright');
 const dotenv = require('dotenv');
 const {
@@ -6,6 +7,7 @@ const {
 	saveStorageState,
 	STORAGE_FILE,
 } = require('./utils/storage-state');
+const { logger, logExecution, generateExecutionId, formatDuration } = require('./utils/logger');
 
 const ENV_PATH = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: ENV_PATH });
@@ -15,8 +17,9 @@ const REGISTER_URL_MATCHER = /registration\/createAccount/i;
 const LOGIN_URL_MATCHER = /nlogin\/login/i;
 
 const PREFERRED_LOCATION = process.env.NAUKRI_TOGGLE_CITY || 'Kolkata';
-
 const HEADLESS = process.env.HEADLESS === 'true';
+const EXECUTION_ID = process.env.EXECUTION_ID || generateExecutionId();
+const VIDEOS_DIR = path.join(__dirname, '..', 'videos');
 
 function requireCredentials() {
 	const email = process.env.USER_EMAIL;
@@ -30,6 +33,7 @@ function requireCredentials() {
 }
 
 async function navigateToRegister(page) {
+	logger.info('Navigating to registration page', { executionId: EXECUTION_ID });
 	await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
 	const registerLink = page.locator('#register_Layer');
 	await registerLink.waitFor({ state: 'visible', timeout: 15000 });
@@ -37,18 +41,22 @@ async function navigateToRegister(page) {
 		page.waitForNavigation({ url: REGISTER_URL_MATCHER, timeout: 15000 }),
 		registerLink.click({ trial: false }),
 	]);
+	logger.info('Registration page loaded', { executionId: EXECUTION_ID });
 }
 
 async function openLoginFromRegister(page) {
+	logger.info('Opening login page', { executionId: EXECUTION_ID });
 	const loginLink = page.locator('a[href="https://www.naukri.com/nlogin/login"]');
 	await loginLink.waitFor({ state: 'visible', timeout: 15000 });
 	await Promise.all([
 		page.waitForNavigation({ url: LOGIN_URL_MATCHER, timeout: 15000 }),
 		loginLink.click(),
 	]);
+	logger.info('Login page loaded', { executionId: EXECUTION_ID });
 }
 
 async function performLogin(page, credentials) {
+	logger.info('Performing login', { executionId: EXECUTION_ID, email: credentials.email });
 	const emailField = page.locator('#usernameField');
 	const passwordField = page.locator('#passwordField');
 	const submitButton = page.getByRole('button', { name: 'Login', exact: true });
@@ -64,12 +72,15 @@ async function performLogin(page, credentials) {
 		page.waitForLoadState('domcontentloaded'),
 		submitButton.click(),
 	]);
+	logger.info('Login form submitted', { executionId: EXECUTION_ID });
 }
 
 async function confirmLogin(page) {
 	try {
 		await page.waitForURL(/naukri.com\/(mnjuser|myhomepage)/i, { timeout: 20000 });
+		logger.info('Login confirmed successfully', { executionId: EXECUTION_ID, url: page.url() });
 	} catch (error) {
+		logger.error('Login confirmation failed', { executionId: EXECUTION_ID, error: error.message });
 		throw new Error('Login might have failed or took too long.');
 	}
 }
@@ -77,25 +88,28 @@ async function confirmLogin(page) {
 async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata') {
 	const profileLink = page.locator('.view-profile-wrapper a[href="/mnjuser/profile"]');
 	await profileLink.waitFor({ state: 'visible', timeout: 30000 });
-	console.log('Login confirmed. Opening profile page...');
+	logger.info('Opening profile page', { executionId: EXECUTION_ID });
 	await profileLink.click();
 	await page.waitForLoadState('domcontentloaded');
 
 	const careerPreferencesHeading = page.locator('h1.section-heading:has-text("Your career preferences")');
 	await careerPreferencesHeading.waitFor({ state: 'visible', timeout: 30000 });
-	console.log('Career preferences section is visible.');
+	logger.info('Career preferences section visible', { executionId: EXECUTION_ID });
 
-	console.log('Opening career preferences editor...');
+	logger.info('Opening career preferences editor', { executionId: EXECUTION_ID });
 	await careerPreferencesHeading.locator('.new-pencil').first().click();
 
 	const preferencesModal = page.locator('.styles_modal__gNwvD[role="dialog"]');
 	await preferencesModal.waitFor({ state: 'visible', timeout: 20000 });
 	await preferencesModal.locator('h1.title:has-text("Career preferences")').waitFor({ state: 'visible', timeout: 10000 });
-	console.log('Career preferences modal open.');
+	logger.info('Career preferences modal opened', { executionId: EXECUTION_ID });
 
 	const locationChip = preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`);
+	let action = '';
+	
 	if (await locationChip.count() > 0) {
-		console.log(`${cityName} already present. Removing to toggle off.`);
+		logger.info('Location already present, removing to toggle off', { executionId: EXECUTION_ID, location: cityName });
+		action = 'removed';
 		const removeIcon = locationChip.locator('.fn-chips-cross');
 		await removeIcon.first().waitFor({ state: 'visible', timeout: 10000 });
 		await removeIcon.first().click();
@@ -104,10 +118,11 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 			.locator(`.selectedChips .chip:has-text("${cityName}")`)
 			.first()
 			.waitFor({ state: 'detached', timeout: 10000 }).catch(() => {
-				console.warn(`Timed out waiting for ${cityName} chip to be detached; continuing.`);
+				logger.warn('Timeout waiting for location chip to be detached', { executionId: EXECUTION_ID, location: cityName });
 			});
 	} else {
-		console.log(`${cityName} not present. Adding to toggle on.`);
+		logger.info('Location not present, adding to toggle on', { executionId: EXECUTION_ID, location: cityName });
+		action = 'added';
 		const locationInput = preferencesModal.locator('#location');
 		await locationInput.click();
 		await locationInput.fill('');
@@ -120,16 +135,31 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 		await suggestion.waitFor({ state: 'visible', timeout: 10000 });
 		await suggestion.click();
 		await preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`).waitFor({ state: 'visible', timeout: 10000 });
-		console.log(`${cityName} added to preferred locations.`);
+		logger.info('Location added to preferred locations', { executionId: EXECUTION_ID, location: cityName });
 	}
 
-	console.log('Saving career preferences...');
+	logger.info('Saving career preferences', { executionId: EXECUTION_ID, action, location: cityName });
 	await preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")').click();
 	await preferencesModal.waitFor({ state: 'hidden', timeout: 20000 });
-	console.log('Career preferences saved.');
+	logger.info('Career preferences saved successfully', { executionId: EXECUTION_ID, action, location: cityName });
+	
+	return action;
 }
 
 async function main() {
+	const startTime = Date.now();
+	let videoPath = null;
+	
+	logger.info('Starting Naukri automation', {
+		executionId: EXECUTION_ID,
+		headless: HEADLESS,
+		preferredLocation: PREFERRED_LOCATION,
+		timestamp: new Date().toISOString(),
+	});
+
+	// Ensure videos directory exists
+	await fs.mkdir(VIDEOS_DIR, { recursive: true });
+
 	const desktopChrome = devices['Desktop Chrome'];
 	const storageState = await loadStorageStatePath();
 	const contextOptions = {
@@ -137,6 +167,11 @@ async function main() {
 		userAgent: desktopChrome.userAgent,
 		locale: 'en-US',
 		colorScheme: 'light',
+		// Enable video recording for ALL runs
+		recordVideo: {
+			dir: VIDEOS_DIR,
+			size: { width: 1280, height: 720 },
+		},
 	};
 
 	if (storageState) {
@@ -147,15 +182,17 @@ async function main() {
 	const context = await browser.newContext(contextOptions);
 	const page = await context.newPage();
 	let sessionActive = false;
+	let action = '';
+	let success = false;
 
 	try {
 		if (storageState) {
 			await page.goto(HOME_URL, { waitUntil: 'domcontentloaded' });
 			if (!LOGIN_URL_MATCHER.test(page.url())) {
 				sessionActive = true;
-				console.log(`Reusing storage state from ${STORAGE_FILE}`);
+				logger.info('Reusing stored session', { executionId: EXECUTION_ID, storageFile: STORAGE_FILE });
 			} else {
-				console.warn('Stored session appears expired. Performing fresh login.');
+				logger.warn('Stored session expired, performing fresh login', { executionId: EXECUTION_ID });
 			}
 		}
 
@@ -167,17 +204,74 @@ async function main() {
 			await confirmLogin(page);
 			await saveStorageState(context);
 			sessionActive = true;
-			console.log(`Login successful. Storage state saved to ${STORAGE_FILE}`);
+			logger.info('Login successful, storage state saved', { executionId: EXECUTION_ID, storageFile: STORAGE_FILE });
 		}
 
 		// After we have a valid session, open profile and toggle preferred location.
-		await openProfileAndTogglePreferredLocation(page, PREFERRED_LOCATION);
+		action = await openProfileAndTogglePreferredLocation(page, PREFERRED_LOCATION);
+		success = true;
+
+		const duration = Date.now() - startTime;
+		
+		// Log execution summary
+		const summary = {
+			executionId: EXECUTION_ID,
+			success: true,
+			action,
+			location: PREFERRED_LOCATION,
+			duration: formatDuration(duration),
+			durationMs: duration,
+			timestamp: new Date().toISOString(),
+			sessionReused: sessionActive && storageState !== null,
+		};
+
+		logExecution(summary);
+		logger.info('Automation completed successfully', summary);
+	} catch (error) {
+		success = false;
+		const duration = Date.now() - startTime;
+		
+		const errorSummary = {
+			executionId: EXECUTION_ID,
+			success: false,
+			action,
+			location: PREFERRED_LOCATION,
+			duration: formatDuration(duration),
+			durationMs: duration,
+			timestamp: new Date().toISOString(),
+			error: error.message,
+			stack: error.stack,
+		};
+
+		logExecution(errorSummary);
+		logger.error('Automation failed', errorSummary);
+		throw error;
 	} finally {
+		// Get video path before closing context
+		try {
+			videoPath = await page.video()?.path();
+		} catch (e) {
+			logger.warn('Could not get video path', { executionId: EXECUTION_ID, error: e.message });
+		}
+
 		await browser.close();
+
+		// Log video recording info
+		if (videoPath) {
+			logger.info('Video recording saved', {
+				executionId: EXECUTION_ID,
+				videoPath,
+				success,
+			});
+		}
 	}
 }
 
 main().catch((error) => {
-	console.error(error);
+	logger.error('Unhandled error in main', {
+		executionId: EXECUTION_ID,
+		error: error.message,
+		stack: error.stack,
+	});
 	process.exitCode = 1;
 });

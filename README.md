@@ -248,7 +248,67 @@ If you notice selectors breaking after a Naukri UI change, update `scripts/naukr
 
 ---
 
-## 10. Deep-Dive Documentation
+## 10. Logging & Video Recording
+
+The automation now includes comprehensive logging and video recording for monitoring and debugging:
+
+### Features
+
+- ✅ **Structured JSON logs** with daily rotation (14-day retention)
+- ✅ **Video recording** for every automation run (not just failures)
+- ✅ **Automated weekly cleanup** of old videos (7-day retention)
+- ✅ **Execution tracking** with unique IDs and duration metrics
+- ✅ **PM2 log management** with custom log paths
+
+### Quick Reference
+
+**Check today's logs:**
+```bash
+# View combined logs
+cat logs/combined-$(date +%Y-%m-%d).log
+
+# View execution summaries only
+cat logs/execution-$(date +%Y-%m-%d).log
+
+# View errors only
+cat logs/error-$(date +%Y-%m-%d).log
+```
+
+**PM2 logs:**
+```bash
+# Live tail
+pm2 logs scheduler
+
+# Last 100 lines
+pm2 logs scheduler --lines 100
+```
+
+**Videos location:**
+- Stored in: `videos/`
+- Cleaned up: Every Monday at 2 AM IST (videos older than 7 days)
+- Manual cleanup: `node scripts/utils/cleanup-videos.js`
+
+### Configuration
+
+Set retention periods in `.env`:
+
+```bash
+LOG_RETENTION_DAYS=14      # How long to keep log files
+VIDEO_RETENTION_DAYS=7     # How long to keep video recordings
+```
+
+### Full Documentation
+
+See **[`docs/LOGGING_SETUP.md`](docs/LOGGING_SETUP.md)** for complete details on:
+- Log format and structure
+- Video recording configuration
+- PM2 log rotation setup
+- Troubleshooting and log analysis
+- Storage management
+
+---
+
+## 11. Deep-Dive Documentation
 
 Need the full architecture map for PM2, the scheduler, automation script, and storage state? Check `docs/automation-stack-guide.md` for:
 

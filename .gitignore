@@ -21,8 +21,12 @@ dist/
 # Temporary files
 temp/
 
-# Videos
+# Videos (recordings of automation runs)
 videos/
+
+# Logs (application and PM2 logs)
+logs/
+*.log
 
 # Browser session state
 storage-states/
