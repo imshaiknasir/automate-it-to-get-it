@@ -9,6 +9,7 @@ const {
 } = require('./utils/storage-state');
 const { logger, logExecution, generateExecutionId, formatDuration } = require('./utils/logger');
 const { sendExecutionNotification } = require('./utils/telegram-notifier');
+const { convertWebMtoMP4 } = require('./utils/video-converter');
 
 const ENV_PATH = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: ENV_PATH });
@@ -105,22 +106,34 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 	await preferencesModal.locator('h1.title:has-text("Career preferences")').waitFor({ state: 'visible', timeout: 10000 });
 	logger.info('Career preferences modal opened', { executionId: EXECUTION_ID });
 
-	const locationChip = preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`);
+	// Hard wait to ensure all chips are rendered and interactive
+	await page.waitForTimeout(2000);
+
+	// Use exact match regex to ensure we target the specific city chip and not a partial match
+	const locationChip = preferencesModal.locator('.selectedChips .chip').filter({ hasText: new RegExp(`^${cityName}$`, 'i') });
 	let action = '';
 	
 	if (await locationChip.count() > 0) {
 		logger.info('Location already present, removing to toggle off', { executionId: EXECUTION_ID, location: cityName });
 		action = 'removed';
 		const removeIcon = locationChip.locator('.fn-chips-cross');
+		
+		// Verify remove icon exists
+		const iconCount = await removeIcon.count();
+		if (iconCount === 0) {
+			throw new Error(`Remove icon not found for location: ${cityName}`);
+		}
+
+		// Ensure element is stable and visible
 		await removeIcon.first().waitFor({ state: 'visible', timeout: 10000 });
+		
+		// Click to remove
 		await removeIcon.first().click();
-		// Wait for any matching chip to disappear from selected chips
-		await preferencesModal
-			.locator(`.selectedChips .chip:has-text("${cityName}")`)
-			.first()
-			.waitFor({ state: 'detached', timeout: 10000 }).catch(() => {
-				logger.warn('Timeout waiting for location chip to be detached', { executionId: EXECUTION_ID, location: cityName });
-			});
+		
+		// Wait for the chip to disappear from selected chips
+		// We removed the catch block so that if it fails to detach, the script throws an error
+		// and doesn't proceed to save invalid state.
+		await locationChip.first().waitFor({ state: 'detached', timeout: 10000 });
 	} else {
 		logger.info('Location not present, adding to toggle on', { executionId: EXECUTION_ID, location: cityName });
 		action = 'added';
@@ -135,7 +148,7 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 		const suggestion = preferencesModal.locator(`.sugItemWrapper:has-text("${cityName}")`).first();
 		await suggestion.waitFor({ state: 'visible', timeout: 10000 });
 		await suggestion.click();
-		await preferencesModal.locator(`.selectedChips .chip:has-text("${cityName}")`).waitFor({ state: 'visible', timeout: 10000 });
+		await preferencesModal.locator('.selectedChips .chip').filter({ hasText: new RegExp(`^${cityName}$`, 'i') }).waitFor({ state: 'visible', timeout: 10000 });
 		logger.info('Location added to preferred locations', { executionId: EXECUTION_ID, location: cityName });
 	}
 
@@ -185,6 +198,8 @@ async function main() {
 	let sessionActive = false;
 	let action = '';
 	let success = false;
+	let finalSummary = null;
+	let executionError = null;
 
 	try {
 		if (storageState) {
@@ -215,7 +230,7 @@ async function main() {
 		const duration = Date.now() - startTime;
 		
 		// Log execution summary
-		const summary = {
+		finalSummary = {
 			executionId: EXECUTION_ID,
 			success: true,
 			action,
@@ -226,14 +241,14 @@ async function main() {
 			sessionReused: sessionActive && storageState !== null,
 		};
 
-		logExecution(summary);
-		logger.info('Automation completed successfully', summary);
-		await sendExecutionNotification(summary);
+		logExecution(finalSummary);
+		logger.info('Automation completed successfully', finalSummary);
 	} catch (error) {
 		success = false;
+		executionError = error;
 		const duration = Date.now() - startTime;
 		
-		const errorSummary = {
+		finalSummary = {
 			executionId: EXECUTION_ID,
 			success: false,
 			action,
@@ -245,10 +260,8 @@ async function main() {
 			stack: error.stack,
 		};
 
-		logExecution(errorSummary);
-		logger.error('Automation failed', errorSummary);
-		await sendExecutionNotification(errorSummary);
-		throw error;
+		logExecution(finalSummary);
+		logger.error('Automation failed', finalSummary);
 	} finally {
 		// Get video path before closing context
 		try {
@@ -257,15 +270,68 @@ async function main() {
 			logger.warn('Could not get video path', { executionId: EXECUTION_ID, error: e.message });
 		}
 
+		// Close context explicitly to ensure video is saved and handle released
+		await context.close();
 		await browser.close();
 
-		// Log video recording info
+				// Rename video with timestamp
 		if (videoPath) {
-			logger.info('Video recording saved', {
-				executionId: EXECUTION_ID,
-				videoPath,
-				success,
-			});
+			try {
+				const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+				const newFileName = `naukri-automation-${timestamp}.webm`;
+				const newVideoPath = path.join(VIDEOS_DIR, newFileName);
+				
+				// Retry rename if file is busy
+				for (let i = 0; i < 5; i++) {
+					try {
+						await fs.rename(videoPath, newVideoPath);
+						videoPath = newVideoPath;
+						break;
+					} catch (renameError) {
+						if (renameError.code === 'EBUSY' && i < 4) {
+							await new Promise(resolve => setTimeout(resolve, 1000));
+							continue;
+						}
+						throw renameError;
+					}
+				}
+
+				// Convert to MP4 for Telegram streaming compatibility
+				try {
+					const mp4Path = videoPath.replace('.webm', '.mp4');
+					await convertWebMtoMP4(videoPath, mp4Path);
+					
+					// Remove original WebM to save space
+					await fs.unlink(videoPath);
+					videoPath = mp4Path;
+					
+					logger.info('Video converted to MP4', { executionId: EXECUTION_ID, videoPath });
+				} catch (conversionError) {
+					logger.warn('Video conversion failed, keeping WebM', { 
+						executionId: EXECUTION_ID, 
+						error: conversionError.message 
+					});
+				}
+				
+				if (finalSummary) {
+					finalSummary.videoPath = videoPath;
+				}
+
+				logger.info('Video recording saved and processed', {
+					executionId: EXECUTION_ID,
+					videoPath,
+					success,
+				});
+			} catch (e) {
+				logger.warn('Failed to process video', { executionId: EXECUTION_ID, error: e.message });
+			}
+		}		// Send notification with video
+		if (finalSummary) {
+			await sendExecutionNotification(finalSummary);
+		}
+
+		if (executionError) {
+			throw executionError;
 		}
 	}
 }

@@ -186,6 +186,53 @@ async function sendExecutionLogDocument(summary) {
   }
 }
 
+async function sendVideoNotification(summary, captionHtml) {
+  try {
+    const filePath = summary.videoPath;
+    await fsp.access(filePath);
+    const buffer = await fsp.readFile(filePath);
+    const fileName = path.basename(filePath);
+    
+    const form = new FormData();
+    form.append('chat_id', process.env.TELEGRAM_CHAT_ID);
+    form.append(
+      'video',
+      new Blob([buffer], { type: 'video/webm' }),
+      fileName,
+    );
+    
+    // Truncate caption if necessary (Telegram limit is 1024 chars)
+    let finalCaption = captionHtml;
+    if (finalCaption.length > 1024) {
+        logger.warn('Caption too long, using short summary');
+        const statusEmoji = summary.success ? '✅' : '❌';
+        finalCaption = `${statusEmoji} <b>Automation ${summary.success ? 'Succeeded' : 'Failed'}</b>\n` +
+           `• <b>ID:</b> <code>${escapeHtml(summary.executionId)}</code>\n` +
+           `• <b>Duration:</b> ${escapeHtml(summary.duration)}\n` + 
+           (summary.error ? `\n<b>Error:</b> ${escapeHtml(summary.error.substring(0, 200))}...` : '') +
+           `\n\n<i>Full logs attached.</i>`;
+    }
+    
+    form.append('caption', finalCaption);
+    form.append('parse_mode', 'HTML');
+
+    const endpoint = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendVideo`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { success: false, reason: `api-error: ${response.status} ${errorText}` };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, reason: error.message };
+  }
+}
+
 async function sendExecutionNotification(summary) {
   if (!isConfigured()) {
     logger.debug('Telegram notification skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID');
@@ -198,41 +245,58 @@ async function sendExecutionNotification(summary) {
   }
 
   const logEntry = await findLogEntryForExecution(summary);
+  const messageHtml = buildMessage(summary, logEntry);
+  
+  let sentAsVideo = false;
 
-  const payload = {
-    chat_id: process.env.TELEGRAM_CHAT_ID,
-    text: buildMessage(summary, logEntry),
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
-  };
-
-  const endpoint = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-
-  try {
-    const response = await globalThis.fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.warn('Telegram notification API responded with non-200 status', {
-        status: response.status,
-        body: errorText,
-      });
-      return { delivered: false, reason: 'api-error' };
-    }
-
-    logger.info('Telegram notification delivered');
-
-    await sendExecutionLogDocument(summary);
-
-    return { delivered: true };
-  } catch (error) {
-    logger.warn('Telegram notification request failed', { error: error.message });
-    return { delivered: false, reason: 'request-error' };
+  // Try sending as video first if available
+  if (summary.videoPath && HAS_FORMDATA_SUPPORT) {
+      const videoResult = await sendVideoNotification(summary, messageHtml);
+      if (videoResult.success) {
+          sentAsVideo = true;
+          logger.info('Telegram notification sent as video');
+      } else {
+          logger.warn('Failed to send video notification, falling back to text', { reason: videoResult.reason });
+      }
   }
+
+  // If not sent as video, send as text
+  if (!sentAsVideo) {
+      const payload = {
+        chat_id: process.env.TELEGRAM_CHAT_ID,
+        text: messageHtml,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      };
+
+      const endpoint = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+      try {
+        const response = await globalThis.fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          logger.warn('Telegram notification API responded with non-200 status', {
+            status: response.status,
+            body: errorText,
+          });
+          return { delivered: false, reason: 'api-error' };
+        }
+        logger.info('Telegram notification delivered (text)');
+      } catch (error) {
+        logger.warn('Telegram notification request failed', { error: error.message });
+        return { delivered: false, reason: 'request-error' };
+      }
+  }
+
+  // Always send the log document
+  await sendExecutionLogDocument(summary);
+
+  return { delivered: true };
 }
 
 module.exports = {

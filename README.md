@@ -302,6 +302,7 @@ pm2 logs scheduler --lines 100
 
 **Videos location:**
 - Stored in: `videos/`
+- Format: MP4 (automatically converted from WebM for Telegram streaming compatibility)
 - Cleaned up: Every Monday at 2 AM IST (videos older than 7 days)
 - Manual cleanup: `node scripts/utils/cleanup-videos.js`
 
