@@ -9,7 +9,8 @@ function runAutomation() {
 	const timestamp = new Date().toISOString();
 	console.log(`[${timestamp}] Triggering naukri-automation.js`);
 
-	const child = spawn('node', [SCRIPT_PATH], {
+	// Wrap the automation script in xvfb-run so Chromium gets a virtual display
+	const child = spawn('xvfb-run', ['-a', 'node', SCRIPT_PATH], {
 		cwd: ROOT_DIR,
 		env: process.env,
 		stdio: 'inherit',

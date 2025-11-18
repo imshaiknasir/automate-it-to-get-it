@@ -190,14 +190,14 @@ For a headless Ubuntu VPS where Chromium needs a virtual display, follow these s
 	nano .env   # fill USER_EMAIL, USER_PASSWORD, NAUKRI_TOGGLE_CITY, HEADLESS, etc.
 	npm install
 	```
-3. **Run the scheduler under Xvfb with PM2**
+3. **Run the scheduler with PM2**
 	```bash
 	pm2 delete scheduler 2>/dev/null || true
-	pm2 start --name scheduler --interpreter bash -- 'xvfb-run -a node scripts/scheduler.js'
+	pm2 start ecosystem.config.js
 	pm2 save
 	pm2 startup systemd
 	```
-	- `xvfb-run -a` launches a lightweight virtual display so Chromium can render without a physical GPU.
+	- The scheduler automatically wraps each automation run with `xvfb-run` so Chromium gets a virtual display.
 	- PM2 keeps the scheduler alive and restarts it on reboot (after `pm2 startup systemd` and `pm2 save`).
 4. **Manual one-off run (optional)**
 	```bash
