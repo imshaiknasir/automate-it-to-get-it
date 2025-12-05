@@ -10,6 +10,7 @@ const {
 const { logger, logExecution, generateExecutionId, formatDuration } = require('./utils/logger');
 const { sendExecutionNotification } = require('./utils/telegram-notifier');
 const { convertWebMtoMP4 } = require('./utils/video-converter');
+const { getNextResume, cleanupTempResumes } = require('./utils/resume-state');
 
 const ENV_PATH = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: ENV_PATH });
@@ -112,12 +113,12 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 	// Use exact match regex to ensure we target the specific city chip and not a partial match
 	const locationChip = preferencesModal.locator('.selectedChips .chip').filter({ hasText: new RegExp(`^${cityName}$`, 'i') });
 	let action = '';
-	
+
 	if (await locationChip.count() > 0) {
 		logger.info('Location already present, removing to toggle off', { executionId: EXECUTION_ID, location: cityName });
 		action = 'removed';
 		const removeIcon = locationChip.locator('.fn-chips-cross');
-		
+
 		// Verify remove icon exists
 		const iconCount = await removeIcon.count();
 		if (iconCount === 0) {
@@ -126,10 +127,10 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 
 		// Ensure element is stable and visible
 		await removeIcon.first().waitFor({ state: 'visible', timeout: 10000 });
-		
+
 		// Click to remove
 		await removeIcon.first().click();
-		
+
 		// Wait for the chip to disappear from selected chips
 		// We removed the catch block so that if it fails to detach, the script throws an error
 		// and doesn't proceed to save invalid state.
@@ -156,14 +157,55 @@ async function openProfileAndTogglePreferredLocation(page, cityName = 'Kolkata')
 	await preferencesModal.locator('button#submit-btn.btn-blue:has-text("Save")').click();
 	await preferencesModal.waitFor({ state: 'hidden', timeout: 20000 });
 	logger.info('Career preferences saved successfully', { executionId: EXECUTION_ID, action, location: cityName });
-	
+
 	return action;
+}
+
+async function uploadResume(page, resumeInfo) {
+	logger.info('Starting resume upload', {
+		executionId: EXECUTION_ID,
+		resumeIndex: resumeInfo.index,
+		resumeName: resumeInfo.name
+	});
+
+	// Scroll to resume section
+	const resumeContainer = page.locator('.resume-upload-container').first();
+	await resumeContainer.scrollIntoViewIfNeeded();
+	await page.waitForTimeout(1000);
+
+	// Get the file input and upload the resume
+	const fileInput = resumeContainer.locator('input[type="file"].upload-input');
+	await fileInput.waitFor({ state: 'attached', timeout: 15000 });
+	await fileInput.setInputFiles(resumeInfo.path);
+	logger.info('Resume file set to input', { executionId: EXECUTION_ID });
+
+	// Wait for progress bar to appear and complete
+	const progressBar = page.locator('.resume-upload-container .progressbar');
+	try {
+		await progressBar.waitFor({ state: 'visible', timeout: 10000 });
+		logger.info('Upload progress bar visible', { executionId: EXECUTION_ID });
+		await progressBar.waitFor({ state: 'hidden', timeout: 60000 });
+	} catch (e) {
+		// Progress bar may not appear for quick uploads
+		logger.info('Progress bar wait skipped', { executionId: EXECUTION_ID });
+	}
+
+	// Wait for upload to complete
+	await page.waitForTimeout(2000);
+
+	logger.info('Resume uploaded successfully', {
+		executionId: EXECUTION_ID,
+		resumeIndex: resumeInfo.index,
+		resumeName: resumeInfo.name,
+	});
+
+	return true;
 }
 
 async function main() {
 	const startTime = Date.now();
 	let videoPath = null;
-	
+
 	logger.info('Starting Naukri automation', {
 		executionId: EXECUTION_ID,
 		headless: HEADLESS,
@@ -225,16 +267,45 @@ async function main() {
 
 		// After we have a valid session, open profile and toggle preferred location.
 		action = await openProfileAndTogglePreferredLocation(page, PREFERRED_LOCATION);
+
+		// Upload resume (alternating between 2 resumes)
+		let resumeInfo = null;
+		let resumeUploaded = false;
+		try {
+			resumeInfo = await getNextResume();
+			if (resumeInfo) {
+				logger.info('Resume selected for upload', {
+					executionId: EXECUTION_ID,
+					resumeIndex: resumeInfo.index,
+					resumeName: resumeInfo.name,
+				});
+				resumeUploaded = await uploadResume(page, resumeInfo);
+			} else {
+				logger.info('No resume files configured, skipping upload', { executionId: EXECUTION_ID });
+			}
+		} catch (resumeError) {
+			logger.warn('Resume upload failed, continuing with execution', {
+				executionId: EXECUTION_ID,
+				error: resumeError.message,
+			});
+		} finally {
+			// Cleanup temp files if any were created (for base64 decoded resumes)
+			await cleanupTempResumes();
+		}
+
 		success = true;
 
 		const duration = Date.now() - startTime;
-		
+
 		// Log execution summary
 		finalSummary = {
 			executionId: EXECUTION_ID,
 			success: true,
 			action,
 			location: PREFERRED_LOCATION,
+			resumeUploaded,
+			resumeIndex: resumeInfo?.index || null,
+			resumeName: resumeInfo?.name || null,
 			duration: formatDuration(duration),
 			durationMs: duration,
 			timestamp: new Date().toISOString(),
@@ -247,7 +318,7 @@ async function main() {
 		success = false;
 		executionError = error;
 		const duration = Date.now() - startTime;
-		
+
 		finalSummary = {
 			executionId: EXECUTION_ID,
 			success: false,
@@ -274,13 +345,13 @@ async function main() {
 		await context.close();
 		await browser.close();
 
-				// Rename video with timestamp
+		// Rename video with timestamp
 		if (videoPath) {
 			try {
 				const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 				const newFileName = `naukri-automation-${timestamp}.webm`;
 				const newVideoPath = path.join(VIDEOS_DIR, newFileName);
-				
+
 				// Retry rename if file is busy
 				for (let i = 0; i < 5; i++) {
 					try {
@@ -300,19 +371,19 @@ async function main() {
 				try {
 					const mp4Path = videoPath.replace('.webm', '.mp4');
 					await convertWebMtoMP4(videoPath, mp4Path);
-					
+
 					// Remove original WebM to save space
 					await fs.unlink(videoPath);
 					videoPath = mp4Path;
-					
+
 					logger.info('Video converted to MP4', { executionId: EXECUTION_ID, videoPath });
 				} catch (conversionError) {
-					logger.warn('Video conversion failed, keeping WebM', { 
-						executionId: EXECUTION_ID, 
-						error: conversionError.message 
+					logger.warn('Video conversion failed, keeping WebM', {
+						executionId: EXECUTION_ID,
+						error: conversionError.message
 					});
 				}
-				
+
 				if (finalSummary) {
 					finalSummary.videoPath = videoPath;
 				}

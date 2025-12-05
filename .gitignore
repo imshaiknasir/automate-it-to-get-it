@@ -34,6 +34,10 @@ storage-states/
 # Temporary CV files
 temp-cvs/
 
+# Resume files (keep actual CVs private)
+resumes/
+resume-state.json
+
 #planing files Roo-code
 plan.md
 .DS_Store
